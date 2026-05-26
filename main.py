@@ -411,6 +411,7 @@ def run_google_drive_processing():
         
         # 2. Procesar secuencialmente
         processed_any_new = False
+        new_files_processed_count = 0
         for gfile in valid_files:
             file_id = gfile["id"]
             file_name = gfile["name"]
@@ -427,6 +428,12 @@ def run_google_drive_processing():
                 print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya procesado en esta sesion).")
                 continue
                 
+            # 3. Límite de procesamiento estricto por escaneo (1 archivo nuevo cada 60 segundos)
+            # Esto divide el lote de archivos y garantiza que NUNCA saturemos la API gratuita de OpenRouter.
+            if new_files_processed_count >= 1:
+                print(f"[ORQUESTADOR] Limite de 1 archivo por escaneo alcanzado. El archivo '{file_name}' se procesara en 60 segundos.")
+                break
+                
             dest_path = os.path.join(temp_dir, file_name)
             
             # Descargar archivo de Drive
@@ -435,6 +442,7 @@ def run_google_drive_processing():
                 was_processed = process_single_file(dest_path)
                 if was_processed:
                     processed_any_new = True
+                    new_files_processed_count += 1
                 
                 # Intentar borrar el archivo temporal para ahorrar espacio
                 try:
