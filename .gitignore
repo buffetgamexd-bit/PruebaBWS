@@ -1,0 +1,25 @@
+# Credenciales y configuraciones sensibles
+.env
+credentials.json
+credentials.json.json
+
+# Archivos de base de datos y logs
+monitoring.db
+error_logs.json
+*.log
+
+# Caché y compilados de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Entornos virtuales
+env/
+venv/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
