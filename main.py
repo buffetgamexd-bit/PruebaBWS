@@ -163,9 +163,9 @@ def run_offline_batch_processing():
     """
     Escanea la carpeta 'Documentos Prueba' local y procesa de forma secuencial todos los archivos.
     """
-    dir_prueba = r"c:\Users\brand\Desktop\PruebaBrandon\Documentos Prueba"
-    
-    if not os.path.exists(dir_prueba):
+    # Usar ruta relativa para que funcione tanto en tu PC como en Render
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dir_prueba = os.path.join(base_dir, "Documentos Prueba")
         print(f"Error: La carpeta de pruebas no existe en {dir_prueba}")
         return
         
