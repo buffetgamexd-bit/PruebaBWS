@@ -132,8 +132,23 @@ Cada mañana, o al finalizar el procesamiento de un lote de archivos, el sistema
 *   Cantidad de éxitos, rechazos y fallos técnicos.
 *   Detalle rápido de cualquier incidencia ocurrida con nombres de archivos y causas para una revisión rápida.
 
-### E. Dashboard Web Premium de Monitoreo (Auto-Recargable)
-La raíz del servidor FastAPI expone una página web diseñada con una interfaz oscura ultra-premium (glassmorphism) que cuenta con:
-*   **Cronómetro Regresivo Interactivo:** Muestra la cuenta regresiva en segundos hasta el próximo escaneo del Drive.
-*   **Auto-Recarga del Navegador:** Al llegar a cero, refresca automáticamente la pantalla sin necesidad de interacción del usuario.
 *   **Historial en Tiempo Real:** Renderiza la tabla de transacciones de SQLite al vuelo, mostrando los archivos en estado **"En Proceso" (PROCESSING)** con una animación de pulso interactiva en el preciso instante en que el orquestador los está analizando, y actualizándolos a **Exitoso** o **Fallido** de forma automática.
+
+---
+
+## 💾 9. Consideraciones de Persistencia en Producción (Render Ephemeral Disks)
+
+Durante las pruebas, es normal observar que si el servidor de Render se reinicia o se despliega una nueva versión, **los archivos del Drive vuelven a procesarse**. Esto se debe a un comportamiento de diseño de la infraestructura de Render:
+
+*   **Discos Efímeros:** Render Web Services utiliza contenedores sin persistencia de disco por defecto en su capa gratuita. Cada despliegue o reinicio borra por completo el disco duro local, lo que significa que el archivo `monitoring.db` de SQLite se elimina y se recrea vacío al iniciar el servidor. Al borrarse la base de datos de historial local y limpiarse la memoria, el bot pierde el registro de qué archivos ya procesó con éxito y los vuelve a escanear como nuevos.
+
+### Soluciones de Producción (Enterprise Ready):
+En un entorno real de producción, este comportamiento se soluciona mediante cualquiera de las siguientes tres estrategias de persistencia:
+
+1.  **Render Persistent Disks (Volúmenes Montados):**  
+    Montar un volumen de disco persistente de Render (por ejemplo, en `/data`) y configurar la variable de entorno `DB_PATH=/data/monitoring.db`. De este modo, la base de datos SQLite sobrevive perfectamente a cualquier despliegue, actualización o reinicio del contenedor.
+2.  **Base de Datos en la Nube (Decoupled Database):**  
+    Migrar el backend de SQLite a una base de datos administrada como **PostgreSQL** (ofrecida nativamente en Render o mediante proveedores como Supabase). Esto independiza totalmente la persistencia del sistema de archivos del servidor web, garantizando 100% de disponibilidad histórica.
+3.  **Consulta Previa en Notion (Double Check):**  
+    Antes de descargar o procesar un archivo, el orquestador puede hacer una llamada rápida de consulta a la API de Notion (`query database`) buscando si ya existe alguna página cuyo título o propiedad de origen coincida con el nombre del archivo. Si existe, se omite de forma inteligente incluso si la base de datos SQLite local estuviera vacía.
+
