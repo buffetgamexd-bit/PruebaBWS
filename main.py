@@ -19,7 +19,7 @@ from telegram_client import (
     send_error_notification,
     send_telegram_message
 )
-from logger import register_transaction, log_error, get_daily_summary
+from logger import register_transaction, log_error, get_daily_summary, is_file_already_processed
 
 # Cargar variables de entorno del archivo .env
 load_dotenv()
@@ -415,7 +415,12 @@ def run_google_drive_processing():
             file_id = gfile["id"]
             file_name = gfile["name"]
             
-            # Usar el hash del archivo de Google Drive (md5Checksum) o su file_id como deduplicación
+            # 1. Deduplicación persistente en base de datos
+            if is_file_already_processed(file_name):
+                print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya registrado con exito en Notion en el historial).")
+                continue
+                
+            # 2. Deduplicación por hash en memoria de esta sesión
             file_hash = gfile.get("md5Checksum", file_id)
             
             if file_hash in PROCESSED_HASHES:

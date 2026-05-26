@@ -72,6 +72,23 @@ def register_transaction(file_name: str, status: str, error_msg: str = "", notio
         # Intentar resguardar en logs de texto si falla la base de datos
         log_error(file_name, "SQLITE_LOG", f"Fallo al guardar en SQLite: {e}")
 
+def is_file_already_processed(file_name: str) -> bool:
+    """Consulta la base de datos SQLite para verificar si el archivo ya se procesó con éxito."""
+    try:
+        init_db()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM transactions WHERE file_name = ? AND status = 'SUCCESS'",
+            (file_name,)
+        )
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception as e:
+        print(f"[Logger] Error al consultar historial en SQLite: {e}")
+        return False
+
 def get_daily_summary() -> str:
     """Genera un reporte consolidado en Markdown/HTML de la ejecución diaria."""
     try:
