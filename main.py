@@ -166,8 +166,10 @@ def run_offline_batch_processing():
     # Usar ruta relativa para que funcione tanto en tu PC como en Render
     base_dir = os.path.dirname(os.path.abspath(__file__))
     dir_prueba = os.path.join(base_dir, "Documentos Prueba")
-        print(f"Error: La carpeta de pruebas no existe en {dir_prueba}")
-        return
+    
+    if not os.path.exists(dir_prueba):
+        print(f"[Aviso] La carpeta de pruebas no existía en {dir_prueba}. Se creará automáticamente.")
+        os.makedirs(dir_prueba, exist_ok=True)
         
     print("\n=========================================")
     print("INICIANDO ESCANEO DE DOCUMENTOS DE PRUEBA")
