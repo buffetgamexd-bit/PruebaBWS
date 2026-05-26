@@ -335,7 +335,7 @@ async def dashboard_index():
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Model LLM</span>
-                        <span class="stat-value">DeepSeek v4 Flash</span>
+                        <span class="stat-value">Gemini 2.5 Flash Lite</span>
                     </div>
                 </div>
                 

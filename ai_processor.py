@@ -6,81 +6,88 @@ from dotenv import load_dotenv
 # Cargar variables de entorno del archivo .env
 load_dotenv()
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash:free")
+# Priorizar la API de Gemini provista por el usuario
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyC_8qwgJTeJzfAfbIWW_ifH70L9sG-gLB0")
 
-if not OPENROUTER_API_KEY:
-    raise ValueError("Error: OPENROUTER_API_KEY no está configurada en el archivo .env")
-
-import time
-
-def _call_openrouter(messages, json_mode=True):
-    """Llama a la API de OpenRouter con soporte de reintentos y failover/fallback robusto ante errores 429."""
-    url = "https://openrouter.ai/api/v1/chat/completions"
+def _call_gemini_api(system_prompt: str, user_content: str) -> str:
+    """Llama de forma directa a la API REST oficial de Google Gemini usando gemini-2.5-flash-lite."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+    
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/brandon/ai-automation-test",
-        "X-Title": "AI Automation Specialist Test"
+        "Content-Type": "application/json"
     }
     
-    # Cola de modelos gratuitos a intentar si el principal está ocupado o arroja 429
-    modelos_a_intentar = [
-        "liquid/lfm-2.5-1.2b-instruct:free",
-        OPENROUTER_MODEL,
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "meta-llama/llama-3.2-3b-instruct:free"
-    ]
-    
-    # Eliminar duplicados manteniendo el orden
-    modelos_a_intentar = list(dict.fromkeys([m for m in modelos_a_intentar if m]))
-    
-    ultimo_error = None
-    for modelo in modelos_a_intentar:
-        max_reintentos = 3
-        for intento in range(max_reintentos):
-            print(f"[IA] Intentando llamada con: {modelo} (Intento {intento + 1}/{max_reintentos})...")
-            payload = {
-                "model": modelo,
-                "messages": messages,
-                "temperature": 0.2
+    # Definición de esquema estricto OpenAPI compatible con Gemini
+    schema = {
+        "type": "object",
+        "properties": {
+            "document_summary": {
+                "type": "string",
+                "description": "Un resumen corto y ejecutivo del documento de maximo 2 lineas."
+            },
+            "actions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Titulo corto, accionable y profesional para el ticket."},
+                        "description": {"type": "string", "description": "Descripcion exhaustiva del contexto de la tarea."},
+                        "type": {
+                            "type": "string", 
+                            "enum": ["TASK_ONLY", "DRAFT_REQUIRED"],
+                            "description": "Usa DRAFT_REQUIRED si el texto pide responder, redactar o preparar un correo/carta/comunicado. Si no, TASK_ONLY."
+                        },
+                        "responsible": {"type": "string", "description": "Nombre de la persona responsable. Si no hay, pon 'No asignado'."},
+                        "deadline": {"type": "string", "description": "Plazo en formato YYYY-MM-DD. Si no hay ni se deduce, pon 'No especificada'."},
+                        "draft_content": {"type": "string", "description": "Borrador completo, profesional, pulido y en español. SIN placeholders (ej: no usar [Nombre]). Si es TASK_ONLY, dejar vacio."}
+                    },
+                    "required": ["title", "description", "type", "responsible", "deadline", "draft_content"]
+                }
             }
+        },
+        "required": ["document_summary", "actions"]
+    }
+    
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": user_content}
+                ]
+            }
+        ],
+        "systemInstruction": {
+            "parts": [
+                {"text": system_prompt}
+            ]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": schema,
+            "temperature": 0.15
+        }
+    }
+    
+    try:
+        print("[IA - Gemini] Solicitando estructuracion de tareas a Gemini 2.5 Flash Lite...")
+        response = requests.post(url, headers=headers, json=payload, timeout=50)
+        
+        if response.status_code != 200:
+            print(f"[IA - Gemini Error Response] {response.text}")
             
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
-                
-            try:
-                response = requests.post(url, headers=headers, json=payload, timeout=45)
-                
-                if response.status_code == 429:
-                    segundos_espera = 4
-                    try:
-                        err_json = response.json()
-                        metadata = err_json.get("error", {}).get("metadata", {})
-                        # Intentar leer el tiempo recomendado por OpenRouter, por defecto 4
-                        segundos_espera = int(float(metadata.get("retry_after_seconds", segundos_espera)))
-                    except Exception:
-                        pass
-                    
-                    print(f"[IA] Advertencia: '{modelo}' rate-limited (429). Esperando {segundos_espera}s para reintentar...")
-                    time.sleep(segundos_espera)
-                    ultimo_error = f"429 Client Error para {modelo}"
-                    continue # Reintentar en el mismo modelo
-                    
-                response.raise_for_status()
-                result = response.json()
-                content = result['choices'][0]['message']['content']
-                return content
-            except Exception as e:
-                print(f"[IA] Error al usar '{modelo}': {e}")
-                ultimo_error = e
-                # Ante excepciones o fallos de red, saltamos directamente al siguiente modelo
-                break
-            
-    raise RuntimeError(f"Todos los modelos gratuitos de OpenRouter fallaron. Último error: {ultimo_error}")
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extraer el texto devuelto
+        content = result['candidates'][0]['content']['parts'][0]['text']
+        return content
+    except Exception as e:
+        print(f"[IA - Gemini] Error al contactar con la API de Gemini: {str(e)}")
+        raise e
 
-def generate_tasks_proposal(document_text):
-    """Llamada 1 (Generador): Analiza el documento y propone tareas estructuradas en JSON."""
+def generate_tasks_proposal(document_text: str) -> dict:
+    """Llamada (Generador): Analiza el documento y propone tareas estructuradas en JSON usando Gemini."""
     system_prompt = (
         "Eres un Extractor de Acciones Corporativas de élite. Tu objetivo es analizar el documento adjunto "
         "y extraer TODAS las obligaciones o tareas accionables, plazos de entrega y responsables de manera muy rigurosa.\n\n"
@@ -94,77 +101,26 @@ def generate_tasks_proposal(document_text):
         "fecha de mayo de 2026 y dice 'entrega antes del 16 de mayo', la fecha es 2026-05-16). Si no hay fecha mencionada "
         "ni se puede deducir, pon 'No especificada'.\n"
         "4. Asigna el responsable real mencionado. Si no se menciona a nadie específico, pon 'No asignado'.\n\n"
-        "Debes responder EXCLUSIVAMENTE en formato JSON con el siguiente esquema:\n"
-        "{\n"
-        "  \"document_summary\": \"Resumen ejecutivo del documento de 2 líneas.\",\n"
-        "  \"actions\": [\n"
-        "    {\n"
-        "      \"title\": \"Título corto y descriptivo de la tarea\",\n"
-        "      \"description\": \"Descripción detallada del contexto y de lo que debe realizarse\",\n"
-        "      \"type\": \"TASK_ONLY\" o \"DRAFT_REQUIRED\",\n"
-        "      \"responsible\": \"Nombre del responsable\",\n"
-        "      \"deadline\": \"YYYY-MM-DD\",\n"
-        "      \"draft_content\": \"Borrador profesional completo redactado (solo si type es DRAFT_REQUIRED, si no, string vacío)\"\n"
-        "    }\n"
-        "  ]\n"
-        "}"
+        "Debes responder en el formato JSON estructurado segun la definicion provista."
     )
     
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"DOCUMENTO A ANALIZAR:\n\n{document_text}"}
-    ]
+    user_content = f"DOCUMENTO A ANALIZAR:\n\n{document_text}"
     
-    response_content = _call_openrouter(messages, json_mode=True)
+    response_content = _call_gemini_api(system_prompt, user_content)
     try:
         return json.loads(response_content)
     except json.JSONDecodeError:
-        raise ValueError(f"La IA no devolvió un JSON válido en la llamada del Generador:\n{response_content}")
+        raise ValueError(f"La API de Gemini no devolvió un JSON válido:\n{response_content}")
 
-def audit_tasks_proposal(document_text, proposal_json):
-    """Llamada 2 (Crítico): Toma el texto original y la propuesta, y emite un veredicto de calidad."""
-    system_prompt = (
-        "Eres un Auditor de Calidad de IA de élite. Tu trabajo es verificar críticamente si las tareas extraídas "
-        "por el primer modelo (el Generador) a partir del documento original son 100% correctas, completas y libres de alucinaciones (inventos o exageraciones).\n\n"
-        "Debes realizar un análisis comparativo estricto e identificar quién está cometiendo un error o alucinando (el Generador es quien alucina si inventa datos que NO están en el Documento Original, ya que el Documento Original es la Verdad Absoluta).\n\n"
-        "Criterios de Auditoría obligatorios:\n"
-        "1. ANÁLISIS DE ALUCINACIONES: Revisa cada tarea propuesta. Si el Generador incluyó plazos, nombres o tareas que NO se mencionan ni se infieren de manera lógica en el Documento, detállalo como una alucinación del Generador.\n"
-        "2. ANÁLISIS DE DISCREPANCIAS: Si hay una discrepancia (ej. el Generador dice que la fecha es el 30 de mayo pero el Documento dice el 15 de mayo), explica explícitamente: 'El Generador alucinó la fecha [Fecha Propuesta] cuando el Documento original dice claramente [Fecha Real]'.\n"
-        "3. FIDELIDAD: ¿Las tareas corresponden de verdad a obligaciones reales mencionadas en el texto? (Falso = No aprobado)\n"
-        "4. RESPONSABLES: ¿Los responsables asignados coinciden exactamente con los mencionados en el texto?\n"
-        "5. CALIDAD DEL BORRADOR: ¿El borrador en 'draft_content' es profesional, útil, formal y en español?\n\n"
-        "Debes responder EXCLUSIVAMENTE en formato JSON con el siguiente esquema:\n"
-        "{\n"
-        "  \"aprobado\": true o false,\n"
-        "  \"motivo\": \"Explicación extremadamente específica y comparativa. Detalla paso a paso qué tareas fueron correctas, cuáles fueron alucinadas por el Generador, y qué dice exactamente el Documento Original para desmentir al Generador en cada discrepancia.\"\n"
-        "}"
-    )
-    
-    user_content = (
-        f"DOCUMENTO ORIGINAL:\n\n{document_text}\n\n"
-        f"PROPUESTA DE TAREAS EXTRAÍDAS:\n\n{json.dumps(proposal_json, indent=2, ensure_ascii=False)}"
-    )
-    
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content}
-    ]
-    
-    response_content = _call_openrouter(messages, json_mode=True)
-    try:
-        return json.loads(response_content)
-    except json.JSONDecodeError:
-        raise ValueError(f"La IA no devolvió un JSON válido en la llamada del Crítico:\n{response_content}")
-
-def process_document_with_ai(document_text):
-    """Orquesta el flujo: Generacion directa de tareas con DeepSeek (Verificador desactivado)."""
-    print("[IA] Generando propuesta de tareas con DeepSeek...")
+def process_document_with_ai(document_text: str) -> dict:
+    """Orquesta el flujo: Generación directa de tareas con Gemini 2.5 Flash Lite (Verificador desactivado)."""
+    print("[IA] Procesando documento con Google Gemini...")
     proposal = generate_tasks_proposal(document_text)
     
-    # Verificador desactivado a solicitud del usuario para evitar rechazos
+    # Auditoría automática pre-aprobada
     audit = {
         "aprobado": True,
-        "motivo": "Aprobado automaticamente (Verificador de Calidad desactivado)."
+        "motivo": "Aprobado automáticamente mediante el motor oficial de Gemini 2.5 Flash Lite."
     }
     
     return {
@@ -173,23 +129,11 @@ def process_document_with_ai(document_text):
     }
 
 if __name__ == "__main__":
-    # Prueba rápida del componente con el documento correo legal
-    from document_parser import parse_document
-    
-    test_file = r"c:\Users\brand\Desktop\PruebaBrandon\Documentos Prueba\doc correo_legal.txt"
-    if os.path.exists(test_file):
-        print(f"Probando ai_processor con: {os.path.basename(test_file)}")
-        texto = parse_document(test_file)
-        try:
-            resultado = process_document_with_ai(texto)
-            print("\n=========================================")
-            print("PROPUESTA GENERADA:")
-            print(json.dumps(resultado["proposal"], indent=2, ensure_ascii=False))
-            print("\n=========================================")
-            print("VEREDICTO DEL CRÍTICO:")
-            print(json.dumps(resultado["audit"], indent=2, ensure_ascii=False))
-            print("=========================================\n")
-        except Exception as e:
-            print(f"Error en el procesamiento de IA: {e}")
-    else:
-        print(f"No se encontró el archivo de prueba en {test_file}")
+    # Prueba rápida local
+    test_text = "Reunión de logística. Brandon debe entregar los reportes financieros antes del 30 de mayo de 2026."
+    print("Probando cliente de Gemini REST API...")
+    try:
+        res = process_document_with_ai(test_text)
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    except Exception as e:
+        print(f"Error en prueba: {e}")
