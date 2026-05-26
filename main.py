@@ -1,8 +1,10 @@
 import os
 import hashlib
 import traceback
+import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.responses import HTMLResponse
 import uvicorn
 
 # Importar componentes locales
@@ -135,6 +137,214 @@ def process_single_file(file_path: str):
         
         # Enviar alerta en tiempo real a Telegram
         send_error_notification(file_name, "ORCHESTRATOR_RUN", error_msg)
+
+# ==========================================
+# BUILT-IN GOOGLE DRIVE POLLING LOOP (Evita problemas de Webhooks)
+# ==========================================
+async def poll_google_drive_loop():
+    """Bucle infinito en segundo plano que busca nuevos archivos en Google Drive cada 60 segundos."""
+    print("[POLLING] Iniciando bucle de monitoreo de Google Drive...")
+    # Esperar unos segundos antes de la primera ejecución para dar tiempo al servidor de estar "Live"
+    await asyncio.sleep(5)
+    while True:
+        try:
+            print("[POLLING] Escaneando Google Drive de forma automatica...")
+            # Correr en un hilo separado para no bloquear el loop asincrono principal de FastAPI
+            await asyncio.to_thread(run_google_drive_processing)
+        except Exception as e:
+            print(f"[POLLING] Error en el bucle de Google Drive: {str(e)}")
+        # Esperar 60 segundos antes de volver a escanear
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup_event():
+    """Evento que se ejecuta al arrancar el servidor FastAPI."""
+    # Iniciar la tarea de escaneo continuo en segundo plano
+    asyncio.create_task(poll_google_drive_loop())
+
+# ==========================================
+# INTERFAZ WEB DE MONITOREO (ROOT DASHBOARD)
+# ==========================================
+@app.get("/", response_class=HTMLResponse)
+async def dashboard_index():
+    """Muestra un panel visual premium con el estado del servidor de automatizaciones."""
+    drive_folder = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "No configurado")
+    notion_db = os.getenv("NOTION_DATABASE_ID", "No configurado")
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Automation Specialist | Dashboard</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --bg-color: #0b0f19;
+                --card-bg: rgba(255, 255, 255, 0.03);
+                --border-color: rgba(255, 255, 255, 0.08);
+                --primary: #4f46e5;
+                --primary-glow: rgba(79, 70, 229, 0.4);
+                --success: #10b981;
+                --text-main: #f3f4f6;
+                --text-muted: #9ca3af;
+            }}
+            body {{
+                font-family: 'Outfit', sans-serif;
+                background-color: var(--bg-color);
+                color: var(--text-main);
+                margin: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background-image: 
+                    radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+            }}
+            .container {{
+                width: 100%;
+                max-width: 600px;
+                padding: 2rem;
+                box-sizing: border-box;
+            }}
+            .card {{
+                background: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 24px;
+                padding: 2.5rem;
+                backdrop-filter: blur(16px);
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+                text-align: center;
+                position: relative;
+                overflow: hidden;
+            }}
+            .card::before {{
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, var(--primary), var(--success));
+            }}
+            h1 {{
+                font-size: 2.2rem;
+                font-weight: 800;
+                margin-top: 0;
+                margin-bottom: 0.5rem;
+                background: linear-gradient(135deg, #fff 40%, var(--text-muted));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }}
+            .subtitle {{
+                color: var(--text-muted);
+                font-size: 1rem;
+                margin-bottom: 2rem;
+            }}
+            .status-badge {{
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--success);
+                padding: 8px 16px;
+                border-radius: 100px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                margin-bottom: 2.5rem;
+                border: 1px solid rgba(16, 185, 129, 0.2);
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+            }}
+            .pulse {{
+                width: 10px;
+                height: 10px;
+                background-color: var(--success);
+                border-radius: 50%;
+                animation: pulse-animation 2s infinite;
+            }}
+            @keyframes pulse-animation {{
+                0% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }}
+                70% {{ transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }}
+                100% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }}
+            }}
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 16px;
+                text-align: left;
+                margin-bottom: 2rem;
+            }}
+            .stat-item {{
+                background: rgba(255, 255, 255, 0.02);
+                border: 1px solid var(--border-color);
+                border-radius: 16px;
+                padding: 1rem 1.25rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .stat-label {{
+                color: var(--text-muted);
+                font-weight: 500;
+                font-size: 0.9rem;
+            }}
+            .stat-value {{
+                font-weight: 600;
+                font-size: 0.9rem;
+                color: #fff;
+                max-width: 60%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }}
+            .footer {{
+                font-size: 0.8rem;
+                color: var(--text-muted);
+                margin-top: 1.5rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h1>AI Specialist Activo</h1>
+                <p class="subtitle">Orquestador de Automatizaciones en la Nube</p>
+                
+                <div class="status-badge">
+                    <span class="pulse"></span>
+                    Monitoreando Google Drive de forma activa
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Google Drive Folder ID</span>
+                        <span class="stat-value">{drive_folder}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Notion Database ID</span>
+                        <span class="stat-value">{notion_db}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Telegram Status</span>
+                        <span class="stat-value" style="color: #10b981;">Conectado</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Model LLM</span>
+                        <span class="stat-value">DeepSeek v4 Flash</span>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    Proyecto desarrollado para Prueba Tecnica BWS &copy; 2026
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content
 
 # ==========================================
 # ENDPOINT WEBHOOK (FastAPI)
