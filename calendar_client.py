@@ -15,16 +15,31 @@ except ImportError:
     service_account = None
     build = None
 
-GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+# Ubicación física encontrada de las credenciales
+REAL_CREDS_PATH = None
 GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 
 def is_calendar_configured() -> bool:
     """Verifica si las librerías y las credenciales físicas de Google Calendar están disponibles."""
     if not GOOGLE_LIBS_AVAILABLE:
         return False
-    if not GOOGLE_CREDENTIALS_FILE or not os.path.exists(GOOGLE_CREDENTIALS_FILE):
-        return False
-    return True
+        
+    # Buscar en orden de prioridad: env, local y secreto de Render
+    creds_locations = [
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        "credentials.json",
+        "/etc/secrets/credentials.json"
+    ]
+    
+    global REAL_CREDS_PATH
+    REAL_CREDS_PATH = None
+    
+    for loc in creds_locations:
+        if loc and os.path.exists(loc):
+            REAL_CREDS_PATH = loc
+            break
+            
+    return REAL_CREDS_PATH is not None
 
 def create_calendar_event(task_title: str, deadline_str: str, notion_url: str) -> str:
     """
@@ -47,11 +62,11 @@ def create_calendar_event(task_title: str, deadline_str: str, notion_url: str) -
         return simulated_event_id
         
     # MODO REAL (Sincronización con la API de Google Calendar v3)
-    print(f"[Calendar] Conectando con Google Calendar API...")
+    print(f"[Calendar] Conectando con Google Calendar API usando credenciales desde {REAL_CREDS_PATH}...")
     try:
         # Cargar credenciales de Service Account
         creds = service_account.Credentials.from_service_account_file(
-            GOOGLE_CREDENTIALS_FILE,
+            REAL_CREDS_PATH,
             scopes=['https://www.googleapis.com/auth/calendar']
         )
         service = build('calendar', 'v3', credentials=creds)

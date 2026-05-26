@@ -44,7 +44,7 @@ def calculate_file_hash(file_path: str) -> str:
         # Fallback simple si hay problemas de lectura física
         return hashlib.sha256(file_path.encode('utf-8')).hexdigest()
 
-def process_single_file(file_path: str) -> bool:
+def process_single_file(file_path: str, file_url: str = None) -> bool:
     """Orquesta la transacción completa de procesamiento para un solo documento."""
     file_name = os.path.basename(file_path)
     print(f"\n=========================================")
@@ -103,7 +103,7 @@ def process_single_file(file_path: str) -> bool:
         for action in raw_actions:
             # Crear ticket en Notion (Devuelve URL real o simulada)
             print(f"[PASO 4/5] Creando ticket en Notion: '{action.get('title')}'...")
-            notion_url = create_task_ticket(file_name, action)
+            notion_url = create_task_ticket(file_name, action, file_url)
             action["notion_page_url"] = notion_url
             
             # Crear evento en Google Calendar (Devuelve ID de evento real o simulado)
@@ -450,8 +450,11 @@ def run_google_drive_processing():
             
             # Descargar archivo de Drive (pasando el mimeType para saber si requiere exportación)
             if download_file(file_id, dest_path, mime_type):
+                # Generar enlace directo del archivo en Google Drive
+                file_url = f"https://drive.google.com/open?id={file_id}"
+                
                 # Procesar archivo descargado
-                was_processed = process_single_file(dest_path)
+                was_processed = process_single_file(dest_path, file_url)
                 if was_processed:
                     processed_any_new = True
                     new_files_processed_count += 1

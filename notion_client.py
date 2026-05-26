@@ -11,7 +11,7 @@ def is_notion_configured() -> bool:
     """Verifica si las credenciales de Notion están provistas."""
     return bool(NOTION_API_KEY and NOTION_DATABASE_ID)
 
-def create_task_ticket(file_name: str, task: dict) -> str:
+def create_task_ticket(file_name: str, task: dict, file_url: str = None) -> str:
     """
     Crea un ticket de tarea en Notion.
     Soporta modo simulación (si no hay API Keys) y modo real (si están configuradas).
@@ -43,7 +43,11 @@ def create_task_ticket(file_name: str, task: dict) -> str:
         "Content-Type": "application/json"
     }
     
+    # Resolver la URL del archivo de Drive. Si no viene, usamos una URL de Drive por defecto
+    valid_file_url = file_url if file_url else "https://drive.google.com"
+    
     # Propiedades básicas del ticket (Omitimos 'Estado' para que Notion use el valor por defecto de tu idioma y evitar errores 400)
+    # Formateamos 'Documento de Origen' como Files & Media para que guarde el archivo adjunto real.
     properties = {
         "Tarea": {
             "title": [{"text": {"content": title}}]
@@ -52,7 +56,13 @@ def create_task_ticket(file_name: str, task: dict) -> str:
             "rich_text": [{"text": {"content": responsible}}]
         },
         "Documento de Origen": {
-            "rich_text": [{"text": {"content": file_name}}]
+            "files": [
+                {
+                    "name": file_name,
+                    "type": "external",
+                    "external": {"url": valid_file_url}
+                }
+            ]
         },
         "Tipo": {
             "select": {"name": task_type}
