@@ -76,7 +76,7 @@ def _call_claude_api(system_prompt: str, user_content: str) -> str:
     
     try:
         print("[IA - Claude] Solicitando estructuracion de tareas a Claude Sonnet 4.6...")
-        response = requests.post(url, headers=headers, json=payload, timeout=50)
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
         
         if response.status_code != 200:
             print(f"[IA - Claude Error Response] {response.text}")

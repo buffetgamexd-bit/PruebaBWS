@@ -19,7 +19,7 @@ from telegram_client import (
     send_error_notification,
     send_telegram_message
 )
-from logger import register_transaction, log_error, get_daily_summary, is_file_already_processed
+from logger import register_transaction, log_error, get_daily_summary, is_file_already_processed, get_recent_transactions
 
 # Cargar variables de entorno del archivo .env
 load_dotenv()
@@ -171,9 +171,64 @@ async def startup_event():
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_index():
     """Muestra un panel visual premium con el estado del servidor de automatizaciones."""
+    from datetime import datetime
     drive_folder = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "No configurado")
     notion_db = os.getenv("NOTION_DATABASE_ID", "No configurado")
     
+    transactions = get_recent_transactions(limit=8)
+    rows_html = ""
+    if not transactions:
+        rows_html = """
+        <tr>
+            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                No hay transacciones registradas en el historial todavía.
+            </td>
+        </tr>
+        """
+    else:
+        for tx in transactions:
+            file_name = tx.get("file_name", "N/A")
+            status = tx.get("status", "N/A")
+            error_msg = tx.get("error_message", "") or ""
+            notion_url = tx.get("notion_page_url", "") or ""
+            timestamp = tx.get("timestamp", "N/A")
+            
+            # Formatear fecha
+            try:
+                dt = datetime.fromisoformat(timestamp)
+                formatted_time = dt.strftime("%d/%m %H:%M")
+            except Exception:
+                formatted_time = timestamp[:16] if len(timestamp) > 16 else timestamp
+                
+            # Badge de estado
+            if status == "SUCCESS":
+                badge_class = "badge-success"
+                status_label = "Exitoso"
+            elif status == "REJECTED_BY_CRITIC":
+                badge_class = "badge-rejected"
+                status_label = "Rechazado"
+            else:
+                badge_class = "badge-failed"
+                status_label = "Fallido"
+                
+            # Detalle o Enlace
+            if status == "SUCCESS" and notion_url:
+                detail_html = f'<a href="{notion_url}" target="_blank" class="notion-link">🔗 Ver Notion</a>'
+            elif error_msg:
+                truncated_error = error_msg[:50] + "..." if len(error_msg) > 50 else error_msg
+                detail_html = f'<span class="error-text" title="{error_msg}">{truncated_error}</span>'
+            else:
+                detail_html = '<span style="color: var(--text-muted);">Sin detalles</span>'
+                
+            rows_html += f"""
+            <tr>
+                <td style="font-weight: 500; color: #fff; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{file_name}</td>
+                <td><span class="badge {badge_class}">{status_label}</span></td>
+                <td>{detail_html}</td>
+                <td style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">{formatted_time}</td>
+            </tr>
+            """
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="es">
@@ -187,8 +242,8 @@ async def dashboard_index():
                 --bg-color: #0b0f19;
                 --card-bg: rgba(255, 255, 255, 0.03);
                 --border-color: rgba(255, 255, 255, 0.08);
-                --primary: #4f46e5;
-                --primary-glow: rgba(79, 70, 229, 0.4);
+                --primary: #6366f1;
+                --primary-glow: rgba(99, 102, 241, 0.4);
                 --success: #10b981;
                 --text-main: #f3f4f6;
                 --text-muted: #9ca3af;
@@ -203,13 +258,14 @@ async def dashboard_index():
                 align-items: center;
                 min-height: 100vh;
                 background-image: 
-                    radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
                     radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+                padding: 2rem 0;
             }}
             .container {{
                 width: 100%;
-                max-width: 600px;
-                padding: 2rem;
+                max-width: 900px;
+                padding: 1.5rem;
                 box-sizing: border-box;
             }}
             .card {{
@@ -274,7 +330,7 @@ async def dashboard_index():
             }}
             .stats-grid {{
                 display: grid;
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 16px;
                 text-align: left;
                 margin-bottom: 2rem;
@@ -291,21 +347,107 @@ async def dashboard_index():
             .stat-label {{
                 color: var(--text-muted);
                 font-weight: 500;
-                font-size: 0.9rem;
+                font-size: 0.85rem;
             }}
             .stat-value {{
                 font-weight: 600;
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 color: #fff;
-                max-width: 60%;
+                max-width: 50%;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }}
+            
+            /* CSS Tabla Premium de Procesos */
+            .table-container {{
+                margin-top: 2.5rem;
+                text-align: left;
+                overflow-x: auto;
+            }}
+            .table-title {{
+                font-size: 1.25rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                background: rgba(255, 255, 255, 0.01);
+                border-radius: 16px;
+                overflow: hidden;
+                border: 1px solid var(--border-color);
+            }}
+            th, td {{
+                padding: 12px 16px;
+                font-size: 0.85rem;
+                border-bottom: 1px solid var(--border-color);
+            }}
+            th {{
+                background: rgba(255, 255, 255, 0.03);
+                font-weight: 600;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                font-size: 0.75rem;
+                letter-spacing: 0.05em;
+            }}
+            tr:last-child td {{
+                border-bottom: none;
+            }}
+            .badge {{
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                white-space: nowrap;
+            }}
+            .badge-success {{
+                background: rgba(16, 185, 129, 0.1);
+                color: var(--success);
+                border: 1px solid rgba(16, 185, 129, 0.2);
+            }}
+            .badge-failed {{
+                background: rgba(239, 68, 68, 0.1);
+                color: #ef4444;
+                border: 1px solid rgba(239, 68, 68, 0.2);
+            }}
+            .badge-rejected {{
+                background: rgba(245, 158, 11, 0.1);
+                color: #f59e0b;
+                border: 1px solid rgba(245, 158, 11, 0.2);
+            }}
+            .notion-link {{
+                color: #818cf8;
+                text-decoration: none;
+                font-weight: 500;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+            }}
+            .notion-link:hover {{
+                text-decoration: underline;
+                color: #a5b4fc;
+            }}
+            .error-text {{
+                font-size: 0.8rem;
+                color: #ef4444;
+                max-width: 250px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                display: inline-block;
+            }}
+            
             .footer {{
                 font-size: 0.8rem;
                 color: var(--text-muted);
-                margin-top: 1.5rem;
+                margin-top: 2rem;
             }}
         </style>
     </head>
@@ -322,25 +464,45 @@ async def dashboard_index():
                 
                 <div class="stats-grid">
                     <div class="stat-item">
-                        <span class="stat-label">Google Drive Folder ID</span>
-                        <span class="stat-value">{drive_folder}</span>
+                        <span class="stat-label">Folder Drive</span>
+                        <span class="stat-value" title="{drive_folder}">{drive_folder}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Notion Database ID</span>
-                        <span class="stat-value">{notion_db}</span>
+                        <span class="stat-label">Notion DB</span>
+                        <span class="stat-value" title="{notion_db}">{notion_db}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Telegram Status</span>
+                        <span class="stat-label">Telegram</span>
                         <span class="stat-value" style="color: #10b981;">Conectado</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Model LLM</span>
-                        <span class="stat-value">Gemini 2.5 Flash Lite</span>
+                        <span class="stat-value">Claude Sonnet 4.6</span>
                     </div>
                 </div>
                 
+                <!-- Tabla Premium de Procesos Recientes -->
+                <div class="table-container">
+                    <div class="table-title">
+                        📊 Historial Reciente de Procesamiento
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Documento</th>
+                                <th style="text-align: left;">Estado</th>
+                                <th style="text-align: left;">Detalle / Enlace</th>
+                                <th style="text-align: left;">Fecha/Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows_html}
+                        </tbody>
+                    </table>
+                </div>
+                
                 <div class="footer">
-                    Proyecto desarrollado para Prueba Tecnica BWS &copy; 2026
+                    Proyecto desarrollado para Prueba Técnica BWS &copy; 2026
                 </div>
             </div>
         </div>

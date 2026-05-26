@@ -89,6 +89,27 @@ def is_file_already_processed(file_name: str) -> bool:
         print(f"[Logger] Error al consultar historial en SQLite: {e}")
         return False
 
+def get_recent_transactions(limit=10):
+    """Devuelve la lista de las últimas transacciones registradas en SQLite."""
+    try:
+        init_db()
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT file_name, status, error_message, notion_page_url, timestamp FROM transactions ORDER BY id DESC LIMIT ?",
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        transactions = []
+        for row in rows:
+            transactions.append(dict(row))
+        conn.close()
+        return transactions
+    except Exception as e:
+        print(f"[Logger] Error al obtener transacciones recientes: {e}")
+        return []
+
 def get_daily_summary() -> str:
     """Genera un reporte consolidado en Markdown/HTML de la ejecución diaria."""
     try:
