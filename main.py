@@ -349,6 +349,12 @@ async def dashboard_index():
     """
     return html_content
 
+@app.get("/health")
+@app.get("/healthz")
+async def health_check():
+    """Endpoint de estado para los health checks de Render u otros proveedores."""
+    return {"status": "ok", "message": "Servidor activo"}
+
 # ==========================================
 # ENDPOINT WEBHOOK (FastAPI)
 # ==========================================
@@ -535,9 +541,10 @@ if __name__ == "__main__":
         print("Iniciando Servidor Webhook FastAPI en el puerto 8000...")
         print("Recuerda exponer este puerto a internet usando: ngrok http 8000")
         uvicorn.run(app, host="0.0.0.0", port=8000)
-    elif len(sys.argv) > 1 and sys.argv[1] == "--local":
-        # Ejecutar en Modo Batch local offline forzado
-        run_offline_batch_processing()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--worker":
+        # Ejecutar solo el bucle de escaneo en segundo plano sin levantar servidor web
+        print("Iniciando en modo Background Worker (sin servidor web)...")
+        asyncio.run(poll_google_drive_loop())
     else:
         # Por defecto, intenta procesar desde Google Drive si el ID esta configurado
         run_google_drive_processing()

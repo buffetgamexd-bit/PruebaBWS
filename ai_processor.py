@@ -6,11 +6,20 @@ from dotenv import load_dotenv
 # Cargar variables de entorno del archivo .env
 load_dotenv()
 
-# Priorizar la API de Gemini provista por el usuario
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyC_8qwgJTeJzfAfbIWW_ifH70L9sG-gLB0")
+# Obtener la API de Gemini desde las variables de entorno
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    # Si no se encuentra en el entorno, intentamos cargarla del .env de forma segura
+    # pero NO dejamos valores por defecto hardcodeados que puedan ser revocados por Google al subirse a GitHub.
+    print("[ERROR CONFIGURACIÓN] La variable GEMINI_API_KEY no está configurada.")
+
 
 def _call_gemini_api(system_prompt: str, user_content: str) -> str:
     """Llama de forma directa a la API REST oficial de Google Gemini usando gemini-2.5-flash-lite."""
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY no está configurada en las variables de entorno o archivo .env. Por favor, agrega una clave válida de Google AI Studio.")
+        
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
     
     headers = {
