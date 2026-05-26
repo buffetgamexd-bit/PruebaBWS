@@ -43,7 +43,7 @@ def create_task_ticket(file_name: str, task: dict) -> str:
         "Content-Type": "application/json"
     }
     
-    # Propiedades básicas del ticket
+    # Propiedades básicas del ticket (Omitimos 'Estado' para que Notion use el valor por defecto de tu idioma y evitar errores 400)
     properties = {
         "Tarea": {
             "title": [{"text": {"content": title}}]
@@ -53,9 +53,6 @@ def create_task_ticket(file_name: str, task: dict) -> str:
         },
         "Documento de Origen": {
             "rich_text": [{"text": {"content": file_name}}]
-        },
-        "Estado": {
-            "status": {"name": "No iniciada"}
         },
         "Tipo": {
             "select": {"name": task_type}
@@ -115,13 +112,18 @@ def create_task_ticket(file_name: str, task: dict) -> str:
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=20)
+        if response.status_code != 200 and response.status_code != 201:
+            print(f"[Notion API Error Response] {response.text}")
         response.raise_for_status()
         result = response.json()
         notion_url = result.get("public_url") or result.get("url") or "https://notion.so"
         print(f"[Notion] ¡Ticket creado con éxito en Notion!: {notion_url}")
         return notion_url
+    except requests.exceptions.HTTPError as e:
+        error_details = response.text if 'response' in locals() else str(e)
+        raise RuntimeError(f"Detalle de error Notion: {error_details}")
     except Exception as e:
-        raise RuntimeError(f"Error al conectar con la API de Notion: {e}")
+        raise RuntimeError(f"Error inesperado al conectar con la API de Notion: {e}")
 
 if __name__ == "__main__":
     # Prueba rápida en modo simulación

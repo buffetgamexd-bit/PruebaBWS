@@ -2,6 +2,7 @@ import os
 import hashlib
 import traceback
 import asyncio
+import time
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
@@ -436,6 +437,9 @@ def run_google_drive_processing():
                         os.remove(dest_path)
                 except Exception as e:
                     print(f"[Advertencia] No se pudo eliminar el archivo temporal {file_name}: {str(e)}")
+                
+                # Pequeña pausa para evitar rate limit de 429 de OpenRouter ante múltiples archivos nuevos
+                time.sleep(3)
                     
         # 3. Reporte Consolidado
         if processed_any_new:
