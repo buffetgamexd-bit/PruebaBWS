@@ -72,6 +72,33 @@ def register_transaction(file_name: str, status: str, error_msg: str = "", notio
         # Intentar resguardar en logs de texto si falla la base de datos
         log_error(file_name, "SQLITE_LOG", f"Fallo al guardar en SQLite: {e}")
 
+def update_transaction_status(file_name: str, status: str, error_msg: str = "", notion_url: str = ""):
+    """Actualiza la última transacción en estado PROCESSING para un archivo a su estado final."""
+    try:
+        init_db()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM transactions WHERE file_name = ? AND status = 'PROCESSING' ORDER BY id DESC LIMIT 1",
+            (file_name,)
+        )
+        row = cursor.fetchone()
+        if row:
+            tx_id = row[0]
+            cursor.execute(
+                "UPDATE transactions SET status = ?, error_message = ?, notion_page_url = ?, timestamp = ? WHERE id = ?",
+                (status, error_msg, notion_url, datetime.now().isoformat(), tx_id)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO transactions (file_name, status, error_message, notion_page_url, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (file_name, status, error_msg, notion_url, datetime.now().isoformat())
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Logger] Error al actualizar transacción en SQLite: {e}")
+
 def is_file_already_processed(file_name: str) -> bool:
     """Consulta la base de datos SQLite para verificar si el archivo ya se procesó con éxito."""
     try:

@@ -19,7 +19,7 @@ from telegram_client import (
     send_error_notification,
     send_telegram_message
 )
-from logger import register_transaction, log_error, get_daily_summary, is_file_already_processed, get_recent_transactions
+from logger import register_transaction, log_error, get_daily_summary, is_file_already_processed, get_recent_transactions, update_transaction_status
 
 # Cargar variables de entorno del archivo .env
 load_dotenv()
@@ -29,6 +29,7 @@ app = FastAPI(title="AI Automation Specialist Webhook Server")
 
 # Diccionario simple en memoria para evitar procesamientos duplicados en esta sesión
 PROCESSED_HASHES = set()
+LAST_SCAN_TIME = None
 
 def calculate_file_hash(file_path: str) -> str:
     """Calcula el hash SHA-256 de un archivo para deduplicación."""
@@ -58,6 +59,9 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
         return False
     
     try:
+        # Registrar estado inicial en proceso
+        register_transaction(file_name, "PROCESSING")
+        
         # 2. Extracción de texto
         print(f"[PASO 1/5] Extrayendo texto de '{file_name}'...")
         document_text = parse_document(file_path)
@@ -80,7 +84,7 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
         if not aprobado:
             # CASO RECHAZADO: Calidad insuficiente o discrepancias
             print(f"[PASO 3/5] [RECHAZADO] RECHAZADO por el Crítico de IA. Motivo: {motivo_auditoria}")
-            register_transaction(file_name, "REJECTED_BY_CRITIC", error_msg=motivo_auditoria)
+            update_transaction_status(file_name, "REJECTED_BY_CRITIC", error_msg=motivo_auditoria)
             send_rejection_notification(file_name, motivo_auditoria)
             print(f"[ORQUESTADOR] Proceso finalizado (Calidad Desaprobada) para '{file_name}'.")
             PROCESSED_HASHES.add(file_hash)
@@ -93,7 +97,7 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
         
         if not raw_actions:
             print(f"[ORQUESTADOR] Advertencia: No se extrajeron tareas accionables en '{file_name}'.")
-            register_transaction(file_name, "SUCCESS", error_msg="No se extrajeron tareas accionables.")
+            update_transaction_status(file_name, "SUCCESS", error_msg="No se extrajeron tareas accionables.")
             send_telegram_message(f"ℹ️ <b>[SISTEMA]</b> El documento <code>{file_name}</code> fue aprobado pero no contenía acciones implícitas.")
             PROCESSED_HASHES.add(file_hash)
             return True
@@ -116,7 +120,7 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
         # 6. Registrar en Base de Datos de Monitoreo SQLite
         # Vinculamos la transacción al primer ticket en Notion para fines de trazabilidad rápida
         notion_principal_url = acciones_procesadas[0].get("notion_page_url", "")
-        register_transaction(file_name, "SUCCESS", notion_url=notion_principal_url)
+        update_transaction_status(file_name, "SUCCESS", notion_url=notion_principal_url)
         
         # 7. Enviar Notificación de Éxito Enriquecida por Telegram
         print(f"[ORQUESTADOR] Enviando notificación de éxito enriquecida a Telegram...")
@@ -134,7 +138,7 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
         print(f"\n[ERROR] [ORQUESTADOR] Falló el procesamiento de '{file_name}': {error_msg}")
         
         # Registrar fallo en base de datos local y archivo JSON de errores físicos
-        register_transaction(file_name, "FAILED", error_msg=error_msg)
+        update_transaction_status(file_name, "FAILED", error_msg=error_msg)
         log_error(file_name, "ORCHESTRATOR_RUN", error_msg, traceback_str)
         
         # Enviar alerta en tiempo real a Telegram
@@ -145,19 +149,22 @@ def process_single_file(file_path: str, file_url: str = None) -> bool:
 # BUILT-IN GOOGLE DRIVE POLLING LOOP (Evita problemas de Webhooks)
 # ==========================================
 async def poll_google_drive_loop():
-    """Bucle infinito en segundo plano que busca nuevos archivos en Google Drive cada 60 segundos."""
+    """Bucle infinito en segundo plano que busca nuevos archivos en Google Drive cada 30 segundos."""
+    global LAST_SCAN_TIME
     print("[POLLING] Iniciando bucle de monitoreo de Google Drive...")
     # Esperar unos segundos antes de la primera ejecución para dar tiempo al servidor de estar "Live"
     await asyncio.sleep(5)
     while True:
         try:
+            from datetime import datetime
             print("[POLLING] Escaneando Google Drive de forma automatica...")
+            LAST_SCAN_TIME = datetime.now().isoformat()
             # Correr en un hilo separado para no bloquear el loop asincrono principal de FastAPI
             await asyncio.to_thread(run_google_drive_processing)
         except Exception as e:
             print(f"[POLLING] Error en el bucle de Google Drive: {str(e)}")
-        # Esperar 60 segundos antes de volver a escanear
-        await asyncio.sleep(60)
+        # Esperar 30 segundos antes de volver a escanear
+        await asyncio.sleep(30)
 
 @app.on_event("startup")
 async def startup_event():
@@ -204,21 +211,21 @@ async def dashboard_index():
             if status == "SUCCESS":
                 badge_class = "badge-success"
                 status_label = "Exitoso"
+                detail_html = f'<a href="{notion_url}" target="_blank" class="notion-link">🔗 Ver Notion</a>' if notion_url else '<span style="color: var(--text-muted);">Sin detalles</span>'
             elif status == "REJECTED_BY_CRITIC":
                 badge_class = "badge-rejected"
                 status_label = "Rechazado"
+                truncated_error = error_msg[:50] + "..." if len(error_msg) > 50 else error_msg
+                detail_html = f'<span class="error-text" title="{error_msg}">{truncated_error}</span>'
+            elif status == "PROCESSING":
+                badge_class = "badge-processing"
+                status_label = "En Proceso"
+                detail_html = '<span style="color: #6366f1; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"><span class="mini-pulse"></span>🤖 Extrayendo tareas...</span>'
             else:
                 badge_class = "badge-failed"
                 status_label = "Fallido"
-                
-            # Detalle o Enlace
-            if status == "SUCCESS" and notion_url:
-                detail_html = f'<a href="{notion_url}" target="_blank" class="notion-link">🔗 Ver Notion</a>'
-            elif error_msg:
                 truncated_error = error_msg[:50] + "..." if len(error_msg) > 50 else error_msg
                 detail_html = f'<span class="error-text" title="{error_msg}">{truncated_error}</span>'
-            else:
-                detail_html = '<span style="color: var(--text-muted);">Sin detalles</span>'
                 
             rows_html += f"""
             <tr>
@@ -228,6 +235,15 @@ async def dashboard_index():
                 <td style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">{formatted_time}</td>
             </tr>
             """
+
+    # Obtener el tiempo transcurrido desde el último escaneo para el cliente
+    last_scan_str = "Nunca"
+    if LAST_SCAN_TIME:
+        try:
+            dt = datetime.fromisoformat(LAST_SCAN_TIME)
+            last_scan_str = dt.strftime("%H:%M:%S")
+        except Exception:
+            last_scan_str = str(LAST_SCAN_TIME)
 
     html_content = f"""
     <!DOCTYPE html>
@@ -302,6 +318,14 @@ async def dashboard_index():
                 font-size: 1rem;
                 margin-bottom: 2rem;
             }}
+            .status-row {{
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 2.5rem;
+                flex-wrap: wrap;
+            }}
             .status-badge {{
                 display: inline-flex;
                 align-items: center;
@@ -312,9 +336,21 @@ async def dashboard_index():
                 border-radius: 100px;
                 font-weight: 600;
                 font-size: 0.9rem;
-                margin-bottom: 2.5rem;
                 border: 1px solid rgba(16, 185, 129, 0.2);
                 box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+            }}
+            .timer-badge {{
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background: rgba(99, 102, 241, 0.1);
+                color: #818cf8;
+                padding: 8px 16px;
+                border-radius: 100px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                border: 1px solid rgba(99, 102, 241, 0.2);
+                box-shadow: 0 0 20px rgba(99, 102, 241, 0.1);
             }}
             .pulse {{
                 width: 10px;
@@ -323,10 +359,18 @@ async def dashboard_index():
                 border-radius: 50%;
                 animation: pulse-animation 2s infinite;
             }}
+            .mini-pulse {{
+                width: 8px;
+                height: 8px;
+                background-color: #6366f1;
+                border-radius: 50%;
+                display: inline-block;
+                animation: pulse-animation 1.5s infinite;
+            }}
             @keyframes pulse-animation {{
-                0% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }}
-                70% {{ transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }}
-                100% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }}
+                0% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }}
+                70% {{ transform: scale(1); box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }}
+                100% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }}
             }}
             .stats-grid {{
                 display: grid;
@@ -422,6 +466,11 @@ async def dashboard_index():
                 color: #f59e0b;
                 border: 1px solid rgba(245, 158, 11, 0.2);
             }}
+            .badge-processing {{
+                background: rgba(99, 102, 241, 0.1);
+                color: #818cf8;
+                border: 1px solid rgba(99, 102, 241, 0.2);
+            }}
             .notion-link {{
                 color: #818cf8;
                 text-decoration: none;
@@ -457,9 +506,14 @@ async def dashboard_index():
                 <h1>AI Specialist Activo</h1>
                 <p class="subtitle">Orquestador de Automatizaciones en la Nube</p>
                 
-                <div class="status-badge">
-                    <span class="pulse"></span>
-                    Monitoreando Google Drive de forma activa
+                <div class="status-row">
+                    <div class="status-badge">
+                        <span class="pulse"></span>
+                        Monitoreando Google Drive
+                    </div>
+                    <div class="timer-badge">
+                        ⏳ Próximo escaneo en: <span id="countdown" style="font-weight: 800; font-size: 1.05rem;">30</span>s
+                    </div>
                 </div>
                 
                 <div class="stats-grid">
@@ -472,8 +526,8 @@ async def dashboard_index():
                         <span class="stat-value" title="{notion_db}">{notion_db}</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Telegram</span>
-                        <span class="stat-value" style="color: #10b981;">Conectado</span>
+                        <span class="stat-label">Último escaneo</span>
+                        <span class="stat-value" style="color: #6366f1;">{last_scan_str}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Model LLM</span>
@@ -506,6 +560,21 @@ async def dashboard_index():
                 </div>
             </div>
         </div>
+
+        <script>
+            // Ticker de Cuenta Regresiva de 30 segundos y Recarga de Página
+            let seconds = 30;
+            const countdownEl = document.getElementById("countdown");
+            const interval = setInterval(() => {{
+                seconds--;
+                if (seconds < 0) {{
+                    seconds = 30;
+                    clearInterval(interval);
+                    location.reload(); // Recarga automática de página cada 30 segundos
+                }}
+                countdownEl.innerText = seconds;
+            }}, 1000);
+        </script>
     </body>
     </html>
     """
