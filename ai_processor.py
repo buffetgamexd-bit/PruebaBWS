@@ -6,29 +6,29 @@ from dotenv import load_dotenv
 # Cargar variables de entorno del archivo .env
 load_dotenv()
 
-# Obtener la API de Gemini desde las variables de entorno
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Obtener la API de Claude desde las variables de entorno
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
-if not GEMINI_API_KEY:
-    # Si no se encuentra en el entorno, intentamos cargarla del .env de forma segura
-    # pero NO dejamos valores por defecto hardcodeados que puedan ser revocados por Google al subirse a GitHub.
-    print("[ERROR CONFIGURACIÓN] La variable GEMINI_API_KEY no está configurada.")
+if not CLAUDE_API_KEY:
+    print("[ERROR CONFIGURACIÓN] La variable CLAUDE_API_KEY no está configurada.")
 
-
-def _call_gemini_api(system_prompt: str, user_content: str) -> str:
-    """Llama de forma directa a la API REST oficial de Google Gemini usando gemini-2.5-flash-lite."""
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY no está configurada en las variables de entorno o archivo .env. Por favor, agrega una clave válida de Google AI Studio.")
+def _call_claude_api(system_prompt: str, user_content: str) -> str:
+    """Llama de forma directa a la API REST oficial de Anthropic Claude usando claude-sonnet-4-6."""
+    if not CLAUDE_API_KEY:
+        raise ValueError("CLAUDE_API_KEY no está configurada en las variables de entorno o archivo .env. Por favor, agrega una clave válida de Anthropic.")
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+    url = "https://api.anthropic.com/v1/messages"
     
     headers = {
-        "Content-Type": "application/json"
+        "x-api-key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
     }
     
-    # Definición de esquema estricto OpenAPI compatible con Gemini
+    # Definición de esquema compatible con Claude (requiere additionalProperties: False)
     schema = {
         "type": "object",
+        "additionalProperties": False,
         "properties": {
             "document_summary": {
                 "type": "string",
@@ -38,6 +38,7 @@ def _call_gemini_api(system_prompt: str, user_content: str) -> str:
                 "type": "array",
                 "items": {
                     "type": "object",
+                    "additionalProperties": False,
                     "properties": {
                         "title": {"type": "string", "description": "Titulo corto, accionable y profesional para el ticket."},
                         "description": {"type": "string", "description": "Descripcion exhaustiva del contexto de la tarea."},
@@ -58,45 +59,40 @@ def _call_gemini_api(system_prompt: str, user_content: str) -> str:
     }
     
     payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": user_content}
-                ]
-            }
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 4000,
+        "system": system_prompt,
+        "messages": [
+            {"role": "user", "content": user_content}
         ],
-        "systemInstruction": {
-            "parts": [
-                {"text": system_prompt}
-            ]
+        "output_config": {
+            "format": {
+                "type": "json_schema",
+                "schema": schema
+            }
         },
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": schema,
-            "temperature": 0.15
-        }
+        "temperature": 0.15
     }
     
     try:
-        print("[IA - Gemini] Solicitando estructuracion de tareas a Gemini 2.5 Flash Lite...")
+        print("[IA - Claude] Solicitando estructuracion de tareas a Claude Sonnet 4.6...")
         response = requests.post(url, headers=headers, json=payload, timeout=50)
         
         if response.status_code != 200:
-            print(f"[IA - Gemini Error Response] {response.text}")
+            print(f"[IA - Claude Error Response] {response.text}")
             
         response.raise_for_status()
         result = response.json()
         
-        # Extraer el texto devuelto
-        content = result['candidates'][0]['content']['parts'][0]['text']
+        # Extraer el texto devuelto en structured outputs
+        content = result['content'][0]['text']
         return content
     except Exception as e:
-        print(f"[IA - Gemini] Error al contactar con la API de Gemini: {str(e)}")
+        print(f"[IA - Claude] Error al contactar con la API de Claude: {str(e)}")
         raise e
 
 def generate_tasks_proposal(document_text: str) -> dict:
-    """Llamada (Generador): Analiza el documento y propone tareas estructuradas en JSON usando Gemini."""
+    """Llamada (Generador): Analiza el documento y propone tareas estructuradas en JSON usando Claude."""
     system_prompt = (
         "Eres un Extractor de Acciones Corporativas de élite. Tu objetivo es analizar el documento adjunto "
         "y extraer TODAS las obligaciones o tareas accionables, plazos de entrega y responsables de manera muy rigurosa.\n\n"
@@ -115,21 +111,21 @@ def generate_tasks_proposal(document_text: str) -> dict:
     
     user_content = f"DOCUMENTO A ANALIZAR:\n\n{document_text}"
     
-    response_content = _call_gemini_api(system_prompt, user_content)
+    response_content = _call_claude_api(system_prompt, user_content)
     try:
         return json.loads(response_content)
     except json.JSONDecodeError:
-        raise ValueError(f"La API de Gemini no devolvió un JSON válido:\n{response_content}")
+        raise ValueError(f"La API de Claude no devolvió un JSON válido:\n{response_content}")
 
 def process_document_with_ai(document_text: str) -> dict:
-    """Orquesta el flujo: Generación directa de tareas con Gemini 2.5 Flash Lite (Verificador desactivado)."""
-    print("[IA] Procesando documento con Google Gemini...")
+    """Orquesta el flujo: Generación directa de tareas con Claude Sonnet 4.6 (Verificador desactivado)."""
+    print("[IA] Procesando documento con Anthropic Claude...")
     proposal = generate_tasks_proposal(document_text)
     
     # Auditoría automática pre-aprobada
     audit = {
         "aprobado": True,
-        "motivo": "Aprobado automáticamente mediante el motor oficial de Gemini 2.5 Flash Lite."
+        "motivo": "Aprobado automáticamente mediante el motor oficial de Claude Sonnet 4.6."
     }
     
     return {
@@ -140,7 +136,7 @@ def process_document_with_ai(document_text: str) -> dict:
 if __name__ == "__main__":
     # Prueba rápida local
     test_text = "Reunión de logística. Brandon debe entregar los reportes financieros antes del 30 de mayo de 2026."
-    print("Probando cliente de Gemini REST API...")
+    print("Probando cliente de Claude REST API...")
     try:
         res = process_document_with_ai(test_text)
         print(json.dumps(res, indent=2, ensure_ascii=False))
