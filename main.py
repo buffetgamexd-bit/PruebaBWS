@@ -148,13 +148,92 @@ async def drive_webhook_receiver(request: Request, background_tasks: BackgroundT
     resource_state = headers.get("x-goog-resource-state")
     channel_id = headers.get("x-goog-channel-id")
     
-    print(f"\n[WEBHOOK] Recibida notificación de Drive. State: {resource_state}, Channel: {channel_id}")
+    print(f"\n[WEBHOOK] Recibida notificacion de Drive. State: {resource_state}, Channel: {channel_id}")
     
-    # En producción, consultaríamos la API de Google Drive para obtener los nuevos archivos agregados.
-    # En este prototipo, disparamos el escaneo de los archivos nuevos en la carpeta de prueba en segundo plano.
-    background_tasks.add_task(run_offline_batch_processing)
+    # Disparar la descarga y procesamiento real desde Google Drive en segundo plano
+    background_tasks.add_task(run_google_drive_processing)
     
     return {"status": "accepted", "message": "Notification queued for processing."}
+
+# ==========================================
+# PROCESAMIENTO REAL DESDE GOOGLE DRIVE
+# ==========================================
+def run_google_drive_processing():
+    """
+    Se conecta a Google Drive, obtiene la lista de archivos de GOOGLE_DRIVE_FOLDER_ID,
+    los descarga temporalmente y los procesa uno por uno.
+    """
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id or folder_id == "AQUI_PON_EL_ID_DE_LA_CARPETA_DE_DRIVE" or "AQUI" in folder_id:
+        print("[Aviso] GOOGLE_DRIVE_FOLDER_ID no configurado. Iniciando escaneo local en su lugar.")
+        run_offline_batch_processing()
+        return
+        
+    print("\n=========================================")
+    print("INICIANDO PROCESAMIENTO DESDE GOOGLE DRIVE")
+    print("=========================================\n")
+    
+    # Asegurar que exista una carpeta temporal de descargas
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    temp_dir = os.path.join(base_dir, "temp_downloads")
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        # Importación diferida para no requerir librerías si se corre offline local simple
+        from drive_client import list_files_in_folder, download_file
+        
+        # 1. Listar archivos de la carpeta
+        files = list_files_in_folder(folder_id)
+        valid_extensions = {'.txt', '.md', '.docx', '.pdf', '.pptx'}
+        
+        # Filtrar solo archivos con extensiones válidas
+        valid_files = []
+        for f in files:
+            name = f.get("name", "")
+            ext = os.path.splitext(name.lower())[1]
+            if ext in valid_extensions:
+                valid_files.append(f)
+                
+        print(f"[ORQUESTADOR] Encontrados {len(valid_files)} archivos validos para procesar en Google Drive.")
+        
+        # 2. Procesar secuencialmente
+        for gfile in valid_files:
+            file_id = gfile["id"]
+            file_name = gfile["name"]
+            
+            # Usar el hash del archivo de Google Drive (md5Checksum) o su file_id como deduplicación
+            file_hash = gfile.get("md5Checksum", file_id)
+            
+            if file_hash in PROCESSED_HASHES:
+                print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya procesado en esta sesion).")
+                continue
+                
+            dest_path = os.path.join(temp_dir, file_name)
+            
+            # Descargar archivo de Drive
+            if download_file(file_id, dest_path):
+                # Procesar archivo descargado
+                process_single_file(dest_path)
+                
+                # Intentar borrar el archivo temporal para ahorrar espacio
+                try:
+                    if os.path.exists(dest_path):
+                        os.remove(dest_path)
+                except Exception as e:
+                    print(f"[Advertencia] No se pudo eliminar el archivo temporal {file_name}: {str(e)}")
+                    
+        # 3. Reporte Consolidado
+        print("\n[ORQUESTADOR] Generando reporte diario consolidado de monitoreo...")
+        reporte = get_daily_summary()
+        send_telegram_message(reporte)
+        
+    except Exception as e:
+        print(f"[ERROR CRITICO] Error durante el procesamiento de Google Drive: {str(e)}")
+        send_error_notification("GOOGLE_DRIVE_SYNC", "GOOGLE_DRIVE_RUN", str(e))
+        
+    print("=========================================")
+    print("PROCESAMIENTO DE GOOGLE DRIVE COMPLETADO")
+    print("=========================================\n")
 
 # ==========================================
 # PROCESAMIENTO OFFLINE POR LOTES (Batch Mode)
@@ -168,11 +247,11 @@ def run_offline_batch_processing():
     dir_prueba = os.path.join(base_dir, "Documentos Prueba")
     
     if not os.path.exists(dir_prueba):
-        print(f"[Aviso] La carpeta de pruebas no existía en {dir_prueba}. Se creará automáticamente.")
+        print(f"[Aviso] La carpeta de pruebas no existia en {dir_prueba}. Se creara automaticamente.")
         os.makedirs(dir_prueba, exist_ok=True)
         
     print("\n=========================================")
-    print("INICIANDO ESCANEO DE DOCUMENTOS DE PRUEBA")
+    print("INICIANDO ESCANEO DE DOCUMENTOS DE PRUEBA LOCAL")
     print("=========================================\n")
     
     # Extensiones de documentos soportadas
@@ -185,7 +264,7 @@ def run_offline_batch_processing():
     
     print(f"Se encontraron {len(archivos)} documentos listos para procesar.")
     
-    # Procesar secuencialmente (Evita concurrencia en la API que causaría 429 adicionales)
+    # Procesar secuencialmente (Evita concurrencia en la API que causaria 429 adicionales)
     for archivo_path in archivos:
         process_single_file(archivo_path)
         
@@ -204,6 +283,9 @@ if __name__ == "__main__":
         print("Iniciando Servidor Webhook FastAPI en el puerto 8000...")
         print("Recuerda exponer este puerto a internet usando: ngrok http 8000")
         uvicorn.run(app, host="0.0.0.0", port=8000)
-    else:
-        # Por defecto, ejecutamos en Modo Batch offline procesando los archivos locales
+    elif len(sys.argv) > 1 and sys.argv[1] == "--local":
+        # Ejecutar en Modo Batch local offline forzado
         run_offline_batch_processing()
+    else:
+        # Por defecto, intenta procesar desde Google Drive si el ID esta configurado
+        run_google_drive_processing()
