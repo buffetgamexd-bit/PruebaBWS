@@ -51,12 +51,28 @@ def list_files_in_folder(folder_id: str):
         print(f"[GOOGLE DRIVE] Error al listar archivos: {str(e)}")
         raise e
 
-def download_file(file_id: str, dest_path: str):
-    """Descarga un archivo de Google Drive a una ruta local temporal."""
+def download_file(file_id: str, dest_path: str, mime_type: str = None):
+    """Descarga un archivo de Google Drive a una ruta local temporal, exportando formatos nativos de Google."""
     try:
         service = get_drive_service()
-        request = service.files().get_media(fileId=file_id)
         
+        # Si es un documento de Google Docs nativo, debemos exportarlo a un formato estándar
+        if mime_type == 'application/vnd.google-apps.document':
+            print(f"[GOOGLE DRIVE] Exportando Google Doc nativo a formato DOCX...")
+            request = service.files().export_media(
+                fileId=file_id,
+                mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+        elif mime_type == 'application/vnd.google-apps.presentation':
+            print(f"[GOOGLE DRIVE] Exportando Google Slide nativo a formato PPTX...")
+            request = service.files().export_media(
+                fileId=file_id,
+                mimeType='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            )
+        else:
+            # Descarga binaria estándar para PDFs, archivos DOCX subidos sin conversión, TXT, etc.
+            request = service.files().get_media(fileId=file_id)
+            
         print(f"[GOOGLE DRIVE] Descargando archivo ID: {file_id} en {dest_path}...")
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)

@@ -399,12 +399,16 @@ def run_google_drive_processing():
         files = list_files_in_folder(folder_id)
         valid_extensions = {'.txt', '.md', '.docx', '.pdf', '.pptx'}
         
-        # Filtrar solo archivos con extensiones válidas
+        # Filtrar solo archivos con extensiones válidas o documentos nativos de Google Docs/Slides
         valid_files = []
         for f in files:
             name = f.get("name", "")
             ext = os.path.splitext(name.lower())[1]
-            if ext in valid_extensions:
+            mime_type = f.get("mimeType", "")
+            if ext in valid_extensions or mime_type in {
+                'application/vnd.google-apps.document',
+                'application/vnd.google-apps.presentation'
+            }:
                 valid_files.append(f)
                 
         print(f"[ORQUESTADOR] Encontrados {len(valid_files)} archivos validos para procesar en Google Drive.")
@@ -415,29 +419,37 @@ def run_google_drive_processing():
         for gfile in valid_files:
             file_id = gfile["id"]
             file_name = gfile["name"]
+            mime_type = gfile.get("mimeType", "")
             
-            # 1. Deduplicación persistente en base de datos
-            if is_file_already_processed(file_name):
-                print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya registrado con exito en Notion en el historial).")
+            # Si es un documento de Google nativo sin extensión, le agregamos la correspondiente para que el parser lo reconozca
+            final_file_name = file_name
+            if mime_type == 'application/vnd.google-apps.document' and not file_name.lower().endswith('.docx'):
+                final_file_name += '.docx'
+            elif mime_type == 'application/vnd.google-apps.presentation' and not file_name.lower().endswith('.pptx'):
+                final_file_name += '.pptx'
+            
+            # 1. Deduplicación persistente en base de datos (con el nombre final del archivo con su extensión)
+            if is_file_already_processed(final_file_name):
+                print(f"[ORQUESTADOR] Omitiendo '{final_file_name}' (Ya registrado con exito en Notion en el historial).")
                 continue
                 
             # 2. Deduplicación por hash en memoria de esta sesión
             file_hash = gfile.get("md5Checksum", file_id)
             
             if file_hash in PROCESSED_HASHES:
-                print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya procesado en esta sesion).")
+                print(f"[ORQUESTADOR] Omitiendo '{final_file_name}' (Ya procesado en esta sesion).")
                 continue
                 
             # 3. Límite de procesamiento estricto por escaneo (1 archivo nuevo cada 60 segundos)
             # Esto divide el lote de archivos y garantiza que NUNCA saturemos la API gratuita de OpenRouter.
             if new_files_processed_count >= 1:
-                print(f"[ORQUESTADOR] Limite de 1 archivo por escaneo alcanzado. El archivo '{file_name}' se procesara en 60 segundos.")
+                print(f"[ORQUESTADOR] Limite de 1 archivo por escaneo alcanzado. El archivo '{final_file_name}' se procesara en 60 segundos.")
                 break
                 
-            dest_path = os.path.join(temp_dir, file_name)
+            dest_path = os.path.join(temp_dir, final_file_name)
             
-            # Descargar archivo de Drive
-            if download_file(file_id, dest_path):
+            # Descargar archivo de Drive (pasando el mimeType para saber si requiere exportación)
+            if download_file(file_id, dest_path, mime_type):
                 # Procesar archivo descargado
                 was_processed = process_single_file(dest_path)
                 if was_processed:
