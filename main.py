@@ -43,7 +43,7 @@ def calculate_file_hash(file_path: str) -> str:
         # Fallback simple si hay problemas de lectura física
         return hashlib.sha256(file_path.encode('utf-8')).hexdigest()
 
-def process_single_file(file_path: str):
+def process_single_file(file_path: str) -> bool:
     """Orquesta la transacción completa de procesamiento para un solo documento."""
     file_name = os.path.basename(file_path)
     print(f"\n=========================================")
@@ -54,7 +54,7 @@ def process_single_file(file_path: str):
     file_hash = calculate_file_hash(file_path)
     if file_hash in PROCESSED_HASHES:
         print(f"[ORQUESTADOR] Omitiendo '{file_name}' (Ya fue procesado en esta sesión).")
-        return
+        return False
     
     try:
         # 2. Extracción de texto
@@ -83,7 +83,7 @@ def process_single_file(file_path: str):
             send_rejection_notification(file_name, motivo_auditoria)
             print(f"[ORQUESTADOR] Proceso finalizado (Calidad Desaprobada) para '{file_name}'.")
             PROCESSED_HASHES.add(file_hash)
-            return
+            return True
             
         # CASO APROBADO: Continuar a integraciones Notion & Calendar
         print(f"[PASO 3/5] [APROBADO] APROBADO por el Crítico de IA. Iniciando registro...")
@@ -95,7 +95,7 @@ def process_single_file(file_path: str):
             register_transaction(file_name, "SUCCESS", error_msg="No se extrajeron tareas accionables.")
             send_telegram_message(f"ℹ️ <b>[SISTEMA]</b> El documento <code>{file_name}</code> fue aprobado pero no contenía acciones implícitas.")
             PROCESSED_HASHES.add(file_hash)
-            return
+            return True
             
         # 5. Registrar en Notion y Google Calendar (Secuencia transaccional con rollback)
         acciones_procesadas = []
@@ -124,6 +124,7 @@ def process_single_file(file_path: str):
         # Registrar hash en la sesión
         PROCESSED_HASHES.add(file_hash)
         print(f"[ORQUESTADOR] Processing completado con éxito para '{file_name}'.\n")
+        return True
         
     except Exception as e:
         # MANEJO GLOBAL DE ERRORES: No interrumpe el orquestador
@@ -137,6 +138,7 @@ def process_single_file(file_path: str):
         
         # Enviar alerta en tiempo real a Telegram
         send_error_notification(file_name, "ORCHESTRATOR_RUN", error_msg)
+        return True
 
 # ==========================================
 # BUILT-IN GOOGLE DRIVE POLLING LOOP (Evita problemas de Webhooks)
@@ -407,6 +409,7 @@ def run_google_drive_processing():
         print(f"[ORQUESTADOR] Encontrados {len(valid_files)} archivos validos para procesar en Google Drive.")
         
         # 2. Procesar secuencialmente
+        processed_any_new = False
         for gfile in valid_files:
             file_id = gfile["id"]
             file_name = gfile["name"]
@@ -423,7 +426,9 @@ def run_google_drive_processing():
             # Descargar archivo de Drive
             if download_file(file_id, dest_path):
                 # Procesar archivo descargado
-                process_single_file(dest_path)
+                was_processed = process_single_file(dest_path)
+                if was_processed:
+                    processed_any_new = True
                 
                 # Intentar borrar el archivo temporal para ahorrar espacio
                 try:
@@ -433,9 +438,10 @@ def run_google_drive_processing():
                     print(f"[Advertencia] No se pudo eliminar el archivo temporal {file_name}: {str(e)}")
                     
         # 3. Reporte Consolidado
-        print("\n[ORQUESTADOR] Generando reporte diario consolidado de monitoreo...")
-        reporte = get_daily_summary()
-        send_telegram_message(reporte)
+        if processed_any_new:
+            print("\n[ORQUESTADOR] Generando reporte diario consolidado de monitoreo...")
+            reporte = get_daily_summary()
+            send_telegram_message(reporte)
         
     except Exception as e:
         print(f"[ERROR CRITICO] Error durante el procesamiento de Google Drive: {str(e)}")
@@ -475,13 +481,17 @@ def run_offline_batch_processing():
     print(f"Se encontraron {len(archivos)} documentos listos para procesar.")
     
     # Procesar secuencialmente (Evita concurrencia en la API que causaria 429 adicionales)
+    processed_any_new = False
     for archivo_path in archivos:
-        process_single_file(archivo_path)
+        was_processed = process_single_file(archivo_path)
+        if was_processed:
+            processed_any_new = True
         
-    # Al terminar, enviar el Reporte Consolidado Diario por Telegram
-    print("\n[ORQUESTADOR] Generando reporte diario final de monitoreo...")
-    reporte = get_daily_summary()
-    send_telegram_message(reporte)
+    # Al terminar, enviar el Reporte Consolidado Diario por Telegram (Solo si se procesaron nuevos)
+    if processed_any_new:
+        print("\n[ORQUESTADOR] Generando reporte diario final de monitoreo...")
+        reporte = get_daily_summary()
+        send_telegram_message(reporte)
     print("=========================================")
     print("PROCESAMIENTO POR LOTES COMPLETADO")
     print("=========================================\n")

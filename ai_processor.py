@@ -157,12 +157,15 @@ def audit_tasks_proposal(document_text, proposal_json):
         raise ValueError(f"La IA no devolvió un JSON válido en la llamada del Crítico:\n{response_content}")
 
 def process_document_with_ai(document_text):
-    """Orquesta el flujo de doble paso: Generación -> Auditoría Crítica."""
-    print("[IA] Paso 1: Generando propuesta de tareas con DeepSeek...")
+    """Orquesta el flujo: Generacion directa de tareas con DeepSeek (Verificador desactivado)."""
+    print("[IA] Generando propuesta de tareas con DeepSeek...")
     proposal = generate_tasks_proposal(document_text)
     
-    print("[AUDITORIA] Paso 2: Auditando la propuesta con el Agente Crítico...")
-    audit = audit_tasks_proposal(document_text, proposal)
+    # Verificador desactivado a solicitud del usuario para evitar rechazos
+    audit = {
+        "aprobado": True,
+        "motivo": "Aprobado automaticamente (Verificador de Calidad desactivado)."
+    }
     
     return {
         "proposal": proposal,
