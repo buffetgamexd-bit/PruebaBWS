@@ -2,7 +2,7 @@
 
 ¡Bienvenido! Este es el repositorio de la prueba técnica desarrollada para el puesto de **AI Automation Specialist**. 
 
-El sistema es un orquestador inteligente que monitorea activamente una carpeta de Google Drive, procesa documentos de clientes en tiempo real utilizando la API oficial de **Anthropic Claude Sonnet 4.6 (Structured Outputs)**, genera borradores contextuales de alta calidad y automatiza la sincronización de tareas estructuradas en **Notion** y plazos en **Google Calendar**, todo monitoreado a través de alertas inmediatas en **Telegram** y un **Dashboard Web Premium** en tiempo real.
+El sistema es un orquestador inteligente que monitorea activamente una carpeta de Google Drive, procesa documentos de clientes en tiempo real utilizando la API oficial de **Anthropic Claude Opus 4.6 (Structured Outputs)**, genera borradores contextuales de alta calidad y automatiza la sincronización de tareas estructuradas en **Notion** y plazos en **Google Calendar**, todo monitoreado a través de alertas inmediatas en **Telegram** y un **Dashboard Web Premium** en tiempo real.
 
 ---
 
@@ -23,7 +23,7 @@ La prueba técnica consta de dos fases integradas en este repositorio:
 *   **Núcleo:** Python 3.10+ (Asíncrono con `asyncio`).
 *   **Servidor Web:** FastAPI + Uvicorn (con Webhooks y rutas `/health` / `/healthz`).
 *   **Base de datos de Monitoreo:** SQLite3 (Persistencia de historial, deduplicación y logs de estados).
-*   **Motor de Inteligencia Artificial:** REST API directa a **Anthropic Claude Sonnet 4.6** (con *Structured Outputs* de una sola vuelta).
+*   **Motor de Inteligencia Artificial:** REST API directa a **Anthropic Claude Opus 4.6** (con *Structured Outputs* de una sola vuelta).
 *   **Integraciones principales:**
     *   **Google Drive API v3:** Descarga y exportación al vuelo de archivos nativos de Google Docs/Slides.
     *   **Google Calendar API v3:** Sincronización automática de plazos y agendas de responsables.
@@ -80,4 +80,4 @@ python main.py --server
 *   **Dashboard Web Premium Integrado:** Panel visual con diseño oscuro moderno y efecto de cristal (glassmorphism) que cuenta con un **cronómetro regresivo interactivo de 30 segundos** y **auto-recarga del navegador** para ver transacciones en tiempo real.
 *   **Manejo de Estados de Transacción en Vivo (`En Proceso`):** En el instante exacto en que el bot detecta un archivo en Drive, lo registra en el Dashboard como `En Proceso (PROCESSING)` con una animación de pulso, actualizándose automáticamente a `Exitoso` o `Fallido` una vez concluyen las llamadas a Notion/Calendar/Telegram.
 *   **Tratamiento de Fallos y Transaccionalidad:** Si una API (como Notion) experimenta un corte o error temporal, el orquestador captura la excepción, registra el fallo en SQLite y en `error_logs.json`, omite la creación de eventos en Calendar correspondientes a esa tarea para evitar eventos huérfanos, envía una alerta estructurada inmediata por Telegram y **sigue procesando el resto de documentos sin detenerse**.
-*   **Redacción de Borradores Impecable:** Claude Sonnet 4.6 está configurado a baja temperatura (`0.15`) y con instrucciones exhaustivas que impiden el uso de placeholders vacíos, garantizando cartas, correos o comunicados listos para que el consultor trabaje sobre ellos de inmediato.
+*   **Redacción de Borradores Impecable:** Claude Opus 4.6 está configurado a baja temperatura (`0.15`) y con instrucciones exhaustivas que impiden el uso de placeholders vacíos, garantizando cartas, correos o comunicados listos para que el consultor trabaje sobre ellos de inmediato.

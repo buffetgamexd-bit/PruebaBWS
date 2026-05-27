@@ -13,7 +13,7 @@ if not CLAUDE_API_KEY:
     print("[ERROR CONFIGURACIÓN] La variable CLAUDE_API_KEY no está configurada.")
 
 def _call_claude_api(system_prompt: str, user_content: str) -> str:
-    """Llama de forma directa a la API REST oficial de Anthropic Claude usando claude-sonnet-4-6."""
+    """Llama de forma directa a la API REST oficial de Anthropic Claude usando Claude Opus 4.6."""
     if not CLAUDE_API_KEY:
         raise ValueError("CLAUDE_API_KEY no está configurada en las variables de entorno o archivo .env. Por favor, agrega una clave válida de Anthropic.")
         
@@ -75,7 +75,7 @@ def _call_claude_api(system_prompt: str, user_content: str) -> str:
     }
     
     try:
-        print("[IA - Claude] Solicitando estructuracion de tareas a Claude Sonnet 4.6...")
+        print("[IA - Claude] Solicitando estructuracion de tareas a Claude Opus 4.6...")
         response = requests.post(url, headers=headers, json=payload, timeout=120)
         
         if response.status_code != 200:
@@ -118,14 +118,14 @@ def generate_tasks_proposal(document_text: str) -> dict:
         raise ValueError(f"La API de Claude no devolvió un JSON válido:\n{response_content}")
 
 def process_document_with_ai(document_text: str) -> dict:
-    """Orquesta el flujo: Generación directa de tareas con Claude Sonnet 4.6 (Verificador desactivado)."""
+    """Orquesta el flujo: Generación directa de tareas con Claude Opus 4.6 (Verificador desactivado)."""
     print("[IA] Procesando documento con Anthropic Claude...")
     proposal = generate_tasks_proposal(document_text)
     
     # Auditoría automática pre-aprobada
     audit = {
         "aprobado": True,
-        "motivo": "Aprobado automáticamente mediante el motor oficial de Claude Sonnet 4.6."
+        "motivo": "Aprobado automáticamente mediante el motor oficial de Claude Opus 4.6."
     }
     
     return {

@@ -12,7 +12,7 @@ Para construir este sistema se priorizó la estabilidad, velocidad de procesamie
 
 *   **Lenguaje y Núcleo del Sistema:** **Python 3.10+**. Su ecosistema es el estándar de la industria para automatizaciones complejas, integración de APIs de IA y parsing robusto de archivos (`docx`, `pdf`, `pptx`, etc.).
 *   **Framework Web y Servidor:** **FastAPI**. Elegido por su velocidad extrema (basado en Starlette y Pydantic), soporte nativo asíncrono para manejar loops en segundo plano de forma eficiente y su facilidad para exponer endpoints de Webhooks seguros.
-*   **Motor de Inteligencia Artificial (LLM):** **Anthropic Claude Sonnet 4.6** (mediante llamada REST directa). Se seleccionó sobre Gemini y modelos de OpenRouter debido a su insuperable calidad de redacción en español corporativo, baja latencia y soporte nativo para **Structured Outputs (GA)** mediante esquemas JSON estrictos, asegurando respuestas con formato 100% válidas en el primer intento.
+*   **Motor de Inteligencia Artificial (LLM):** **Anthropic Claude Opus 4.6** (mediante llamada REST directa). Se seleccionó sobre Gemini y modelos de OpenRouter debido a su insuperable calidad de redacción en español corporativo, baja latencia y soporte nativo para **Structured Outputs (GA)** mediante esquemas JSON estrictos, asegurando respuestas con formato 100% válidas en el primer intento.
 *   **Herramienta de Gestión de Tareas:** **Notion API**. Notion se eligió frente a Linear o Trello por su extrema flexibilidad de base de datos relacional. Permite configurar columnas personalizadas para almacenar fechas límites nativas, enlaces rich directos al documento de origen en Google Drive, badges de responsables e incrustar borradores formateados dentro del cuerpo de la página del ticket.
 *   **Sincronización de Calendario:** **Google Calendar API (v3)**. Permite la integración directa del deadline de la tarea al calendario principal del responsable, garantizando que el consultor tenga visibilidad inmediata en su agenda diaria.
 *   **Monitoreo y Alertas en Tiempo Real:** **Telegram Bot API**. Permite enviar notificaciones enriquecidas de éxito al instante con formato HTML, alertas de fallos técnicos críticos y reportes consolidados diarios directamente al celular del consultor.
@@ -54,7 +54,7 @@ Para evitar inconsistencias de datos entre herramientas (por ejemplo, agendar un
  1. Descarga y Parseo del Documento
          │
          ▼
- 2. Análisis con Claude Sonnet 4.6 (JSON Estructurado)
+ 2. Análisis con Claude Opus 4.6 (JSON Estructurado)
          │
          ▼
  3. Registro Inicial en SQLite como 'PROCESSING' (En Proceso)
@@ -94,7 +94,7 @@ Si un documento largo genera múltiples tareas (por ejemplo, 8 acciones en un so
 Procesar 200 documentos diarios puede resultar sumamente costoso si no se optimiza el consumo de tokens. El sistema implementa las siguientes estrategias de optimización financiera:
 
 *   **Structured Outputs de Una Sola Vuelta:** Al forzar a la API de Claude a devolver la respuesta estructurada y validada en JSON en su primera respuesta, se previene la necesidad de realizar llamadas correctivas (conversaciones multi-turno o reintentos de formato), lo que reduce el consumo de tokens en un **50%**.
-*   **Remoción de Agentes Críticos Redundantes:** Consolidamos el poder de análisis y control de calidad en **una sola llamada directa y altamente directiva** a Claude Sonnet 4.6, eliminando el coste adicional de tokens de entrada/salida de un agente secundario de verificación que causaba duplicación de llamadas.
+*   **Remoción de Agentes Críticos Redundantes:** Consolidamos el poder de análisis y control de calidad en **una sola llamada directa y altamente directiva** a Claude Opus 4.6, eliminando el coste adicional de tokens de entrada/salida de un agente secundario de verificación que causaba duplicación de llamadas.
 *   **Truncado Inteligente de Texto:** Antes de enviar el texto extraído del documento a la IA, el orquestador trunca el contenido a un máximo de 40,000 caracteres (suficiente para capturar propuestas ejecutivas extensas) para prevenir picos inesperados de consumo de tokens en documentos masivos.
 
 ---
@@ -160,7 +160,7 @@ Para facilitar una comprensión visual rápida y ejecutiva de todo el ecosistema
 
 👉 **[ABRIR DIAGRAMA DE FLUJO INTERACTIVO (flujo_interactivo.html)](file:///c:/Users/brand/Desktop/PruebaBrandon/flujo_interactivo.html)** *(Haz doble clic sobre el archivo en tu sistema para abrirlo de forma interactiva en tu navegador web).*
 
-### 📊 Desglose de Operaciones y Costos (Claude 3.5 Sonnet)
+### 📊 Desglose de Operaciones y Costos (Claude Opus 4.6)
 Una de las preguntas clave en entornos empresariales es el retorno de inversión (ROI) y los costos operativos de la Inteligencia Artificial. A continuación, se detalla el análisis de costos para el procesamiento de documentos:
 
 *   **Entrada Promedio por Documento:** 1,940 caracteres (~485 tokens de texto limpio extraído del archivo).
@@ -168,7 +168,7 @@ Una de las preguntas clave en entornos empresariales es el retorno de inversión
 *   **Total Tokens de Entrada (Input):** ~2,000 tokens.
 *   **Total Tokens de Salida (Output):** ~500 tokens (JSON estructurado con la clasificación, prioridad y el borrador redactado en español).
 
-#### 🪙 Cálculo de Costo (Precios oficiales de Anthropic Claude 3.5 Sonnet):
+#### 🪙 Cálculo de Costo (Precios oficiales de Anthropic Claude Opus 4.6):
 *   **Costo de Entrada:** $3.00 USD por millón de tokens ($0.003 USD por 1K).
     $$\text{Costo Input} = 2,000 \times \left(\frac{\$3.00}{1,000,000}\right) = \$0.006\text{ USD}$$
 *   **Costo de Salida:** $15.00 USD por millón de tokens ($0.015 USD por 1K).

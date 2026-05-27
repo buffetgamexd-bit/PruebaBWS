@@ -531,7 +531,7 @@ async def dashboard_index():
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Model LLM</span>
-                        <span class="stat-value">Claude Sonnet 4.6</span>
+                        <span class="stat-value">Claude Opus 4.6</span>
                     </div>
                 </div>
                 
