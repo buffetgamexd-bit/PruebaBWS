@@ -152,3 +152,51 @@ En un entorno real de producción, este comportamiento se soluciona mediante cua
 3.  **Consulta Previa en Notion (Double Check):**  
     Antes de descargar o procesar un archivo, el orquestador puede hacer una llamada rápida de consulta a la API de Notion (`query database`) buscando si ya existe alguna página cuyo título o propiedad de origen coincida con el nombre del archivo. Si existe, se omite de forma inteligente incluso si la base de datos SQLite local estuviera vacía.
 
+---
+
+## 🗺️ 10. Diagrama de Flujo Interactivo (Estilo n8n) y Análisis de Costos
+
+Para facilitar una comprensión visual rápida y ejecutiva de todo el ecosistema de automatización, hemos desarrollado un **Diagrama de Flujo Interactivo Premium** en formato HTML independiente. 
+
+👉 **[ABRIR DIAGRAMA DE FLUJO INTERACTIVO (flujo_interactivo.html)](file:///c:/Users/brand/Desktop/PruebaBrandon/flujo_interactivo.html)** *(Haz doble clic sobre el archivo en tu sistema para abrirlo de forma interactiva en tu navegador web).*
+
+### 📊 Desglose de Operaciones y Costos (Claude 3.5 Sonnet)
+Una de las preguntas clave en entornos empresariales es el retorno de inversión (ROI) y los costos operativos de la Inteligencia Artificial. A continuación, se detalla el análisis de costos para el procesamiento de documentos:
+
+*   **Entrada Promedio por Documento:** 1,940 caracteres (~485 tokens de texto limpio extraído del archivo).
+*   **System Prompt + Esquemas JSON Estrictos:** ~1,500 tokens (instrucciones directivas de comportamiento y el esquema del Structured Output).
+*   **Total Tokens de Entrada (Input):** ~2,000 tokens.
+*   **Total Tokens de Salida (Output):** ~500 tokens (JSON estructurado con la clasificación, prioridad y el borrador redactado en español).
+
+#### 🪙 Cálculo de Costo (Precios oficiales de Anthropic Claude 3.5 Sonnet):
+*   **Costo de Entrada:** $3.00 USD por millón de tokens ($0.003 USD por 1K).
+    $$\text{Costo Input} = 2,000 \times \left(\frac{\$3.00}{1,000,000}\right) = \$0.006\text{ USD}$$
+*   **Costo de Salida:** $15.00 USD por millón de tokens ($0.015 USD por 1K).
+    $$\text{Costo Output} = 500 \times \left(\frac{\$15.00}{1,000,000}\right) = \$0.0075\text{ USD}$$
+*   **Costo Promedio Total por Documento:** **$0.0135 USD** (aprox. **$0.27 MXN**).
+*   **Procesamiento Masivo de 100 Documentos:** **$1.35 USD** (aprox. **$27.00 MXN**). 
+
+> [!TIP]
+> **Eficiencia Financiera Extrema:** Gracias a la arquitectura de **Structured Outputs de una sola vuelta**, el bot nunca realiza llamadas correctivas (lo que duplicaría los costos en caso de JSONs mal formados), logrando un ahorro del **50%** en tokens frente a implementaciones tradicionales de prompt-engineering.
+
+---
+
+### ⏳ Comportamiento del Servidor y Polling (Render Free Tier vs Producción)
+El orquestador está actualmente configurado para realizar un **Polling Activo cada 30 segundos** en la carpeta de Google Drive. A continuación, explicamos la disponibilidad según la infraestructura:
+
+1.  **Entorno de Pruebas (Render Free Tier):**
+    *   **Cold Start (Inactividad):** Si no hay peticiones HTTP entrantes al Dashboard durante **15 minutos**, Render "apaga" (suspende) el servidor para liberar recursos.
+    *   **Consecuencia en el Polling:** Al suspenderse el servidor, el bucle en segundo plano de Google Drive se detiene. Si subes un archivo a Drive mientras duerme, no se procesará inmediatamente.
+    *   **Reactivación:** En cuanto un usuario visita la URL de nuestro [Dashboard Web](https://pruebabws.onrender.com/), el servidor despierta (tarda unos 45 segundos en iniciar) y procesa automáticamente de golpe todos los archivos pendientes acumulados en Drive.
+    
+2.  **Entorno de Producción (Enterprise Ready):**
+    *   **Always-On ($7 USD/mes):** Al contratar el plan Web Service básico de Render, el servidor nunca entra en modo de suspensión. El loop de polling funciona de forma continua 24/7 de manera ininterrumpida.
+    *   **Solución Alternativa Gratuita (UptimeRobot):** Se puede configurar un cron job externo gratuito en [UptimeRobot](https://uptimerobot.com) que haga ping al endpoint `/healthz` de nuestro dashboard cada 10-14 minutos. Esto mantiene el servidor de Render "despierto" las 24 horas del día a costo cero.
+
+---
+
+### 🔗 Enlaces Importantes de Acceso Rápido
+*   💻 **[Dashboard de Monitoreo en Vivo (Desplegado)](https://pruebabws.onrender.com/)**
+*   📁 **[Carpeta de Google Drive (Monitoreada)](https://drive.google.com/drive/folders/1_8ADStAk0-EG64bDtqVlZ8ppZadigNST)**
+
+

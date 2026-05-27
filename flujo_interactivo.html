@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flujo de Orquestación Inteligente - AI Specialist</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --canvas-bg: #0d1321;
+            --card-bg: rgba(20, 28, 47, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            
+            --accent-drive: #34a853;
+            --accent-fastapi: #009688;
+            --accent-claude: #d97706;
+            --accent-sqlite: #003b57;
+            --accent-notion: #000000;
+            --accent-calendar: #4285f4;
+            --accent-telegram: #229ed9;
+            
+            --glow-drive: rgba(52, 168, 83, 0.15);
+            --glow-fastapi: rgba(0, 150, 136, 0.15);
+            --glow-claude: rgba(217, 119, 6, 0.15);
+            --glow-sqlite: rgba(0, 59, 87, 0.15);
+            --glow-notion: rgba(255, 255, 255, 0.1);
+            --glow-calendar: rgba(66, 133, 244, 0.15);
+            --glow-telegram: rgba(34, 158, 217, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 1.5rem 2rem;
+            background: rgba(13, 19, 33, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .header-title h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-title p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .header-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Workspace Layout */
+        .workspace {
+            flex: 1;
+            display: flex;
+            position: relative;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+        }
+
+        /* Canvas (n8n Style) */
+        .canvas-container {
+            flex: 1;
+            background-color: var(--canvas-bg);
+            background-image: 
+                radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0),
+                radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+            position: relative;
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem;
+        }
+
+        .flow-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 120px; /* Space between steps for connections */
+            padding: 2rem;
+        }
+
+        /* SVG Connections Layer */
+        .connections-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Nodes */
+        .node {
+            position: relative;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            width: 120px;
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 2;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .node::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, transparent, transparent);
+            z-index: -1;
+            transition: all 0.3s ease;
+        }
+
+        .node-icon-wrapper {
+            width: 54px;
+            height: 54px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .node-icon-wrapper svg, .node-icon-wrapper img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+        }
+
+        .node-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+            max-width: 90%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Node Specific Styling & Glows on Hover */
+        .node-drive:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: var(--accent-drive);
+            box-shadow: 0 12px 30px var(--glow-drive);
+        }
+        .node-drive:hover .node-icon-wrapper {
+            background: rgba(52, 168, 83, 0.1);
+        }
+
+        .node-fastapi:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: var(--accent-fastapi);
+            box-shadow: 0 12px 30px var(--glow-fastapi);
+        }
+        .node-fastapi:hover .node-icon-wrapper {
+            background: rgba(0, 150, 136, 0.1);
+        }
+
+        .node-claude:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: var(--accent-claude);
+            box-shadow: 0 12px 30px var(--glow-claude);
+        }
+        .node-claude:hover .node-icon-wrapper {
+            background: rgba(217, 119, 6, 0.1);
+        }
+
+        .node-sqlite:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: #007acc;
+            box-shadow: 0 12px 30px var(--glow-sqlite);
+        }
+        .node-sqlite:hover .node-icon-wrapper {
+            background: rgba(0, 122, 204, 0.1);
+        }
+
+        .node-notion:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: #ffffff;
+            box-shadow: 0 12px 30px var(--glow-notion);
+        }
+        .node-notion:hover .node-icon-wrapper {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .node-calendar:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: var(--accent-calendar);
+            box-shadow: 0 12px 30px var(--glow-calendar);
+        }
+        .node-calendar:hover .node-icon-wrapper {
+            background: rgba(66, 133, 244, 0.1);
+        }
+
+        .node-telegram:hover {
+            transform: translateY(-5px) scale(1.05);
+            border-color: var(--accent-telegram);
+            box-shadow: 0 12px 30px var(--glow-telegram);
+        }
+        .node-telegram:hover .node-icon-wrapper {
+            background: rgba(34, 158, 217, 0.1);
+        }
+
+        /* Active State */
+        .node.selected {
+            border-width: 2px;
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.4) !important;
+            transform: scale(1.08) translateY(-5px);
+        }
+
+        /* Side Info Panel */
+        .info-panel {
+            width: 380px;
+            background: rgba(13, 19, 33, 0.85);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            z-index: 5;
+            transition: transform 0.3s ease;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .panel-header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel-header-title h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .panel-header-title span {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .panel-content {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .panel-badge {
+            align-self: flex-start;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+
+        .panel-section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        .panel-description {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #d1d5db;
+        }
+
+        /* Metric Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metric-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: white;
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        /* Bullet list */
+        .info-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .info-list li {
+            position: relative;
+            padding-left: 18px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #d1d5db;
+        }
+
+        .info-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #3b82f6;
+            font-weight: 700;
+        }
+
+        /* Quick helper tooltip at bottom of canvas */
+        .canvas-helper {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 19, 33, 0.8);
+            border: 1px solid var(--card-border);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            backdrop-filter: blur(8px);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #3b82f6;
+            border-radius: 50%;
+            animation: pulse-animation 1.5s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .workspace {
+                flex-direction: column;
+                height: auto;
+                overflow: visible;
+            }
+            .canvas-container {
+                height: 500px;
+                padding: 1.5rem;
+            }
+            .info-panel {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--card-border);
+                height: auto;
+            }
+            .flow-wrapper {
+                gap: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title">
+            <h1>Orquestador Inteligente BWS ⚡</h1>
+            <p>Diagrama de Flujo Interactivo de la Prueba Técnica de Brandon</p>
+        </div>
+        <div class="header-links">
+            <a href="https://drive.google.com/drive/folders/1_8ADStAk0-EG64bDtqVlZ8ppZadigNST" target="_blank" class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                Carpeta Drive
+            </a>
+            <a href="https://pruebabws.onrender.com/" target="_blank" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                Ver Dashboard en Vivo
+            </a>
+        </div>
+    </header>
+
+    <!-- Workspace -->
+    <div class="workspace">
+        
+        <!-- Canvas area -->
+        <div class="canvas-container" id="canvasContainer">
+            
+            <div class="flow-wrapper" id="flowWrapper">
+                
+                <!-- SVG Canvas connections layer -->
+                <svg class="connections-layer" id="svgLayer">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#4b5563" />
+                        </marker>
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#3b82f6" />
+                        </marker>
+                    </defs>
+                </svg>
+
+                <!-- Node 1: Google Drive -->
+                <div class="node node-drive" id="node-drive" onclick="selectNode('drive')">
+                    <div class="node-icon-wrapper">
+                        <!-- Google Drive Icon SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7.74 2H16.26L23 13.68L14.74 13.68L11.26 7.68L7.74 2Z" fill="#FFC107"/>
+                            <path d="M0.740005 13.68L4.26 7.68L12.52 21.88L5.74 21.88L0.740005 13.68Z" fill="#1565C0"/>
+                            <path d="M16.26 21.88H7.74L11.26 15.88L23 13.68L16.26 21.88Z" fill="#4CAF50"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">Google Drive</div>
+                </div>
+
+                <!-- Node 2: FastAPI -->
+                <div class="node node-fastapi" id="node-fastapi" onclick="selectNode('fastapi')">
+                    <div class="node-icon-wrapper">
+                        <!-- FastAPI Icon SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#009688"/>
+                            <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z" fill="#00796B"/>
+                            <path d="M2 12L12 17L22 12V7L12 12L2 7V12Z" fill="#00897B"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">Orquestador</div>
+                </div>
+
+                <!-- Node 3: Claude -->
+                <div class="node node-claude" id="node-claude" onclick="selectNode('claude')">
+                    <div class="node-icon-wrapper">
+                        <!-- Claude Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#D97706"/>
+                            <path d="M16.5 7.5L7.5 16.5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M7.5 7.5L16.5 16.5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">Claude LLM</div>
+                </div>
+
+                <!-- Node 4: SQLite -->
+                <div class="node node-sqlite" id="node-sqlite" onclick="selectNode('sqlite')">
+                    <div class="node-icon-wrapper">
+                        <!-- Database Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.48 2 2 4.02 2 6.5V17.5C2 19.98 6.48 22 12 22C17.52 22 22 19.98 22 17.5V6.5C22 4.02 17.52 2 12 2Z" fill="#003b57" stroke="#007acc" stroke-width="1.5"/>
+                            <path d="M22 6.5C22 8.98 17.52 11 12 11C6.48 11 2 8.98 2 6.5" stroke="#007acc" stroke-width="1.5"/>
+                            <path d="M22 12C22 14.48 17.52 16.5 12 16.5C6.48 16.5 2 14.48 2 12" stroke="#007acc" stroke-width="1.5"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">SQLite</div>
+                </div>
+
+                <!-- Node 5: Notion -->
+                <div class="node node-notion" id="node-notion" onclick="selectNode('notion')">
+                    <div class="node-icon-wrapper" style="background:#000;">
+                        <!-- Notion Text/Muted Icon -->
+                        <span style="font-family:'Outfit',sans-serif;font-weight:900;color:white;font-size:22px;">N</span>
+                    </div>
+                    <div class="node-label">Notion DB</div>
+                </div>
+
+                <!-- Node 6: Calendar -->
+                <div class="node node-calendar" id="node-calendar" onclick="selectNode('calendar')">
+                    <div class="node-icon-wrapper">
+                        <!-- Calendar Icon SVG -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="3" y="4" width="18" height="18" rx="2" fill="#4285F4"/>
+                            <path d="M3 9H21" stroke="white" stroke-width="2"/>
+                            <rect x="7" y="2" width="2" height="4" rx="1" fill="#EA4335"/>
+                            <rect x="15" y="2" width="2" height="4" rx="1" fill="#EA4335"/>
+                            <circle cx="8" cy="13" r="1.5" fill="white"/>
+                            <circle cx="16" cy="13" r="1.5" fill="white"/>
+                            <circle cx="12" cy="17" r="1.5" fill="white"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">Google Cal</div>
+                </div>
+
+                <!-- Node 7: Telegram -->
+                <div class="node node-telegram" id="node-telegram" onclick="selectNode('telegram')">
+                    <div class="node-icon-wrapper">
+                        <!-- Telegram Icon -->
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#229ED9"/>
+                            <path d="M5.5 12L19.5 6.5L17.5 17.5L12.5 14L10 16.5V14.5L5.5 12Z" fill="white"/>
+                        </svg>
+                    </div>
+                    <div class="node-label">Telegram</div>
+                </div>
+
+            </div>
+
+            <!-- Canvas Helper -->
+            <div class="canvas-helper">
+                <div class="pulse-dot"></div>
+                <span>Haz clic en cualquier nodo para ver sus métricas y explicación detallada</span>
+            </div>
+
+        </div>
+
+        <!-- Sidebar Panel -->
+        <div class="info-panel" id="infoPanel">
+            
+            <div class="panel-header" id="panelHeader">
+                <div class="panel-header-icon" id="panelHeaderIcon" style="background: rgba(52, 168, 83, 0.1);">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#34a853"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+                </div>
+                <div class="panel-header-title">
+                    <span id="panelCategory" style="color: var(--accent-drive);">Punto de Origen</span>
+                    <h2 id="panelTitle">Google Drive</h2>
+                </div>
+            </div>
+
+            <div class="panel-content">
+                
+                <span class="panel-badge badge-success" id="panelStatus">Activo en Carpeta</span>
+                
+                <div>
+                    <h3 class="panel-section-title">¿Qué hace en el flujo?</h3>
+                    <p class="panel-description" id="panelDescription">
+                        Almacena los documentos entregados por los clientes en formatos nativos de Google (`Docs`, `Slides`) o estándar (`.pdf`, `.docx`, `.txt`, `.pptx`). Actúa como el desencadenante de todo el sistema.
+                    </p>
+                </div>
+
+                <div id="panelMetricsSection">
+                    <h3 class="panel-section-title">Métricas Clave</h3>
+                    <div class="metrics-grid" id="panelMetrics">
+                        <div class="metric-card">
+                            <span class="metric-value" id="metric1-val">30s</span>
+                            <span class="metric-label" id="metric1-lbl">Frecuencia Polling</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-value" id="metric2-val">Múltiple</span>
+                            <span class="metric-label" id="metric2-lbl">Formatos Soportados</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="panel-section-title">Detalles de Arquitectura</h3>
+                    <ul class="info-list" id="panelDetails">
+                        <li>Usa la API de Google Drive v3 para descargas directas.</li>
+                        <li>Exporta dinámicamente Google Docs a texto limpio (.txt).</li>
+                        <li>Procesa un máximo de 1 archivo por ciclo de 30s para evitar rate limits.</li>
+                    </ul>
+                </div>
+
+                <div id="panelActionSection" style="margin-top: auto;">
+                    <a href="https://drive.google.com/drive/folders/1_8ADStAk0-EG64bDtqVlZ8ppZadigNST" target="_blank" class="btn btn-secondary" style="width: 100%; justify-content: center; background: rgba(52, 168, 83, 0.1); border-color: rgba(52, 168, 83, 0.2); color: #34d399;">
+                        Abrir Carpeta de Drive
+                    </a>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        // Nodes database
+        const nodeData = {
+            drive: {
+                title: "Google Drive",
+                category: "Punto de Origen",
+                status: "Activo en Carpeta",
+                statusClass: "badge-success",
+                iconBg: "rgba(52, 168, 83, 0.1)",
+                iconColor: "#34a853",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><path d="M7.74 2H16.26L23 13.68L14.74 13.68L11.26 7.68L7.74 2Z" fill="#FFC107"/><path d="M0.740005 13.68L4.26 7.68L12.52 21.88L5.74 21.88L0.740005 13.68Z" fill="#1565C0"/><path d="M16.26 21.88H7.74L11.26 15.88L23 13.68L16.26 21.88Z" fill="#4CAF50"/></svg>`,
+                description: "Almacena los documentos cargados por los clientes. El orquestador monitorea activamente la carpeta compartida para detectar, descargar y leer automáticamente archivos nuevos sin intervención humana.",
+                metrics: [
+                    { value: "30s", label: "Intervalo de Polling" },
+                    { value: "5+ tipos", label: "Formatos (.docx, .pdf, Docs...)" }
+                ],
+                details: [
+                    "Descarga segura usando API Google Drive v3 con Service Account.",
+                    "Conversión asíncrona de archivos propietarios de Google Cloud (Docs, Slides) en tiempo real.",
+                    "Cola inteligente: Procesamiento de 1 archivo por ciclo para prevenir picos de llamadas."
+                ],
+                actionLink: "https://drive.google.com/drive/folders/1_8ADStAk0-EG64bDtqVlZ8ppZadigNST",
+                actionLabel: "Abrir Carpeta de Drive"
+            },
+            fastapi: {
+                title: "Orquestador FastAPI",
+                category: "Núcleo de Operación",
+                status: "Desplegado en Render",
+                statusClass: "badge-success",
+                iconBg: "rgba(0, 150, 136, 0.1)",
+                iconColor: "#009688",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="#009688"><path d="M12 2L2 7L12 12L22 7L12 2Z"/><path d="M2 17L12 22L22 17V12L12 17L2 12V17Z" opacity="0.8"/><path d="M2 12L12 17L22 12V7L12 12L2 7V12Z" opacity="0.9"/></svg>`,
+                description: "Es el cerebro técnico y el servidor web del sistema. Ejecuta la lógica asíncrona de revisión, gestiona la conexión con las bases de datos y aloja el Dashboard Web interactivo en tiempo real en la nube.",
+                metrics: [
+                    { value: "FastAPI", label: "Framework Asíncrono" },
+                    { value: "Render", label: "Servidor Cloud (Free)" }
+                ],
+                details: [
+                    "Aloja el Dashboard Premium con cronómetro regresivo de 30 segundos.",
+                    "Mecanismo de 'Cold Start': Si el plan free de Render se duerme (15 min de inactividad), el loop se apaga y despierta al visitar la URL.",
+                    "Manejo dinámico de estados de transacción: Cambia a 'PROCESSING' de forma instantánea al iniciar el análisis."
+                ],
+                actionLink: "https://pruebabws.onrender.com/",
+                actionLabel: "Ver Dashboard en Vivo"
+            },
+            claude: {
+                title: "Anthropic Claude 3.5",
+                category: "Motor Cognitivo",
+                status: "Structured Outputs (JSON)",
+                statusClass: "badge-warning",
+                iconBg: "rgba(217, 119, 6, 0.1)",
+                iconColor: "#d97706",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#D97706"/><path d="M16.5 7.5L7.5 16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M7.5 7.5L16.5 16.5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>`,
+                description: "Analiza el contenido del documento mediante Structured Outputs estricto (JSON). Clasifica las acciones necesarias en 'TASK_ONLY' o 'DRAFT_REQUIRED', y genera los borradores contextuales en español sin placeholders genéricos.",
+                metrics: [
+                    { value: "1940 carac.", label: "Promedio por Documento" },
+                    { value: "$0.0135 USD", label: "Costo Promedio / Documento" }
+                ],
+                details: [
+                    "Costo calculado de $3.00/M tokens entrada y $15.00/M tokens salida.",
+                    "Lector eficiente de 1940 caracteres promedio (~480 tokens) + System Prompts (1500 tokens) = $0.006 USD input, $0.0075 USD output.",
+                    "Consolidado en una única llamada hiper-optimizada con temperatura baja (0.15) para máxima fidelidad."
+                ],
+                actionLink: null,
+                actionLabel: ""
+            },
+            sqlite: {
+                title: "SQLite 3",
+                category: "Persistencia & Auditoría",
+                status: "monitoring.db local",
+                statusClass: "badge-success",
+                iconBg: "rgba(0, 122, 204, 0.1)",
+                iconColor: "#007acc",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><path d="M12 2C6.48 2 2 4.02 2 6.5V17.5C2 19.98 6.48 22 12 22C17.52 22 22 19.98 22 17.5V6.5C22 4.02 17.52 2 12 2Z" fill="#003b57" stroke="#007acc" stroke-width="1.5"/><path d="M22 6.5C22 8.98 17.52 11 12 11C6.48 11 2 8.98 2 6.5" stroke="#007acc" stroke-width="1.5"/></svg>`,
+                description: "Base de datos local ligera encargada de registrar la trazabilidad histórica de cada documento. Sirve como capa de deduplicación y alimenta visualmente el Dashboard con los estados del bot.",
+                metrics: [
+                    { value: "SHA-256", label: "Deduplicación por Hash" },
+                    { value: "4 Estados", label: "En Proceso, Éxito, Fallo" }
+                ],
+                details: [
+                    "Evita el doble procesamiento de archivos comparando hashes SHA-256 de forma inmediata.",
+                    "Limitación en Render: Al desplegar o reiniciar, el disco efímero limpia SQLite y causa re-escaneos de archivos que sigan en el Drive.",
+                    "Solución comercial: Agregar un Render Persistent Volume o migrar a PostgreSQL externa (ej. Supabase)."
+                ],
+                actionLink: null,
+                actionLabel: ""
+            },
+            notion: {
+                title: "Notion API",
+                category: "Gestión de Tareas",
+                status: "Integración Directa",
+                statusClass: "badge-success",
+                iconBg: "rgba(255, 255, 255, 0.05)",
+                iconColor: "#ffffff",
+                iconSvg: `<div style="width:24px;height:24px;border-radius:4px;background:#000;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-family:'Outfit';font-weight:900;font-size:14px;">N</span></div>`,
+                description: "Crea automáticamente los tickets de trabajo en la Base de Datos Relacional de Notion del consultor. Registra metadatos críticos como responsables, prioridad y enlaces de regreso al documento original.",
+                metrics: [
+                    { value: "Rich Text", label: "Borradores Incrustados" },
+                    { value: "Relacional", label: "Enlace Drive a Notion" }
+                ],
+                details: [
+                    "Si Claude clasifica una acción como 'DRAFT_REQUIRED', Notion aloja la redacción del borrador en el cuerpo de la página.",
+                    "Implementa rate limit protection agregando pausas de 3 segundos entre inserciones.",
+                    "Eje central de la transaccionalidad: Si falla, cancela los pasos posteriores para evitar inconsistencias."
+                ],
+                actionLink: null,
+                actionLabel: ""
+            },
+            calendar: {
+                title: "Google Calendar",
+                category: "Calendario & Plazos",
+                status: "Sincronización v3",
+                statusClass: "badge-success",
+                iconBg: "rgba(66, 133, 244, 0.1)",
+                iconColor: "#4285f4",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" fill="#4285F4"/><path d="M3 9H21" stroke="white" stroke-width="1.5"/><circle cx="8" cy="13" r="1" fill="white"/></svg>`,
+                description: "Registra eventos de forma automatizada en el calendario principal del consultor asignado. Sincroniza la fecha límite detectada por la IA para asegurar que ningún plazo se pase por alto.",
+                metrics: [
+                    { value: "API v3", label: "Llamadas Secuenciales" },
+                    { value: "Tolerante", label: "Sin Eventos Huérfanos" }
+                ],
+                details: [
+                    "Inserta en la descripción del evento un link de acceso rápido directo al Ticket de Notion creado en el paso anterior.",
+                    "Tolerancia a fallos: Si Notion falló al crear el ticket, Google Calendar no se agenda para evitar alertas falsas.",
+                    "Soporta asignación dinámica de responsables."
+                ],
+                actionLink: null,
+                actionLabel: ""
+            },
+            telegram: {
+                title: "Telegram Bot",
+                category: "Alertas & Reportes",
+                status: "Monitoreo Proactivo",
+                statusClass: "badge-success",
+                iconBg: "rgba(34, 158, 217, 0.1)",
+                iconColor: "#229ed9",
+                iconSvg: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none"><path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#229ED9"/><path d="M5.5 12L19.5 6.5L17.5 17.5L12.5 14L10 16.5V14.5L5.5 12Z" fill="white"/></svg>`,
+                description: "Canal de alerta técnica y resumen operativo. Envía notificaciones de éxito consolidando los tickets de Notion generados, alertas rojas (🚨) con stack traces en caso de errores en APIs, y reportes diarios.",
+                metrics: [
+                    { value: "< 1 seg", label: "Velocidad de Alerta" },
+                    { value: "HTML", label: "Mensajes Formateados" }
+                ],
+                details: [
+                    "Asegura el monitoreo proactivo en el móvil del consultor o administrador sin requerir abrir el dashboard.",
+                    "Centraliza los reportes consolidados cada mañana listando fallos del lote anterior.",
+                    "Muestra los enlaces directos a Notion recién creados para agilizar el flujo de trabajo."
+                ],
+                actionLink: null,
+                actionLabel: ""
+            }
+        };
+
+        // Select Node and populate sidebar panel
+        function selectNode(nodeId) {
+            // Remove selected class from all nodes
+            document.querySelectorAll('.node').forEach(node => {
+                node.classList.remove('selected');
+            });
+
+            // Add selected class to current node
+            const selectedNodeElement = document.getElementById(`node-${nodeId}`);
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.add('selected');
+            }
+
+            const data = nodeData[nodeId];
+            if (!data) return;
+
+            // Update Panel Headers
+            const headerIcon = document.getElementById('panelHeaderIcon');
+            headerIcon.style.backgroundColor = data.iconBg;
+            headerIcon.innerHTML = data.iconSvg;
+
+            const categorySpan = document.getElementById('panelCategory');
+            categorySpan.style.color = data.iconColor;
+            categorySpan.textContent = data.category;
+
+            document.getElementById('panelTitle').textContent = data.title;
+
+            // Status Badge
+            const statusBadge = document.getElementById('panelStatus');
+            statusBadge.className = `panel-badge ${data.statusClass}`;
+            statusBadge.textContent = data.status;
+
+            // Description
+            document.getElementById('panelDescription').textContent = data.description;
+
+            // Metrics
+            if (data.metrics && data.metrics.length >= 2) {
+                document.getElementById('panelMetricsSection').style.display = 'block';
+                document.getElementById('metric1-val').textContent = data.metrics[0].value;
+                document.getElementById('metric1-lbl').textContent = data.metrics[0].label;
+                document.getElementById('metric2-val').textContent = data.metrics[1].value;
+                document.getElementById('metric2-lbl').textContent = data.metrics[1].label;
+            } else {
+                document.getElementById('panelMetricsSection').style.display = 'none';
+            }
+
+            // Details List
+            const detailsList = document.getElementById('panelDetails');
+            detailsList.innerHTML = '';
+            data.details.forEach(detail => {
+                const li = document.createElement('li');
+                li.textContent = detail;
+                detailsList.appendChild(li);
+            });
+
+            // Action Button
+            const actionSection = document.getElementById('panelActionSection');
+            if (data.actionLink) {
+                actionSection.style.display = 'block';
+                actionSection.innerHTML = `
+                    <a href="${data.actionLink}" target="_blank" class="btn btn-secondary" style="width: 100%; justify-content: center; background: ${data.iconBg}; border-color: rgba(${hexToRgb(data.iconColor)}, 0.2); color: ${data.iconColor};">
+                        ${data.actionLabel}
+                    </a>
+                `;
+            } else {
+                actionSection.style.display = 'none';
+            }
+
+            // Active visual line path highlighted
+            highlightConnections(nodeId);
+        }
+
+        // Helper to convert hex to rgb for button border alpha
+        function hexToRgb(hex) {
+            // Simple mapping for defined colors
+            const colors = {
+                '#34a853': '52, 168, 83',
+                '#009688': '0, 150, 136',
+                '#d97706': '217, 119, 6',
+                '#007acc': '0, 122, 204',
+                '#ffffff': '255, 255, 255',
+                '#4285f4': '66, 133, 244',
+                '#229ed9': '34, 158, 217'
+            };
+            return colors[hex] || '255, 255, 255';
+        }
+
+        // Draw connections
+        function drawConnections() {
+            const svg = document.getElementById('svgLayer');
+            const wrapper = document.getElementById('flowWrapper');
+            
+            // Set SVG dimensions matching wrapper
+            svg.setAttribute('width', wrapper.offsetWidth);
+            svg.setAttribute('height', wrapper.offsetHeight);
+
+            // Clear previous paths (except definitions)
+            const paths = svg.querySelectorAll('path');
+            paths.forEach(p => p.remove());
+
+            const nodesOrder = ['drive', 'fastapi', 'claude', 'sqlite', 'notion', 'calendar', 'telegram'];
+            
+            for (let i = 0; i < nodesOrder.length - 1; i++) {
+                const nodeFrom = document.getElementById(`node-${nodesOrder[i]}`);
+                const nodeTo = document.getElementById(`node-${nodesOrder[i+1]}`);
+                
+                if (!nodeFrom || !nodeTo) continue;
+
+                // Calculate connection coordinates relative to wrapper
+                const fromX = nodeFrom.offsetLeft + nodeFrom.offsetWidth;
+                const fromY = nodeFrom.offsetTop + (nodeFrom.offsetHeight / 2);
+                
+                const toX = nodeTo.offsetLeft;
+                const toY = nodeTo.offsetTop + (nodeTo.offsetHeight / 2);
+
+                const midX = fromX + (toX - fromX) / 2;
+
+                // Create smooth cubic bezier curve
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const d = `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
+                
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', '#374151');
+                path.setAttribute('stroke-width', '2.5');
+                path.setAttribute('marker-end', 'url(#arrow)');
+                path.setAttribute('id', `conn-${nodesOrder[i]}-to-${nodesOrder[i+1]}`);
+                path.style.transition = 'all 0.3s ease';
+                
+                svg.appendChild(path);
+            }
+        }
+
+        // Highlight visual connections leading to selected node
+        function highlightConnections(nodeId) {
+            const nodesOrder = ['drive', 'fastapi', 'claude', 'sqlite', 'notion', 'calendar', 'telegram'];
+            const selectIndex = nodesOrder.indexOf(nodeId);
+
+            // Reset all paths
+            for (let i = 0; i < nodesOrder.length - 1; i++) {
+                const path = document.getElementById(`conn-${nodesOrder[i]}-to-${nodesOrder[i+1]}`);
+                if (path) {
+                    path.setAttribute('stroke', '#374151');
+                    path.setAttribute('marker-end', 'url(#arrow)');
+                    path.removeAttribute('stroke-dasharray');
+                }
+            }
+
+            // Highlight path leading to selected
+            for (let i = 0; i < selectIndex; i++) {
+                const path = document.getElementById(`conn-${nodesOrder[i]}-to-${nodesOrder[i+1]}`);
+                if (path) {
+                    path.setAttribute('stroke', '#3b82f6');
+                    path.setAttribute('marker-end', 'url(#arrow-active)');
+                }
+            }
+            
+            // Pulse dasharray for the next connector
+            const nextPath = document.getElementById(`conn-${nodeId}-to-${nodesOrder[selectIndex+1]}`);
+            if (nextPath) {
+                nextPath.setAttribute('stroke', '#60a5fa');
+                nextPath.setAttribute('stroke-dasharray', '8, 4');
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            drawConnections();
+            selectNode('drive'); // Default select Drive
+        });
+
+        window.addEventListener('resize', drawConnections);
+    </script>
+</body>
+</html>
